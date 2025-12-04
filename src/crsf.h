@@ -21,4 +21,4 @@ struct TelemetryData_t {
     unsigned long lastUpdate;
 };
 
-bool parseCRSFPacket(const uint8_t *data, int len, TelemetryData* telemetry);
+bool parseCRSFPacket(const uint8_t *data, int len, TelemetryData_t* telemetry);

@@ -20,7 +20,7 @@
 #define QUEUE_SIZE 20
 #define PACKET_TIMEOUT_MS 200
 #define TELEMETRY_TIMEOUT_MS 3000
-UDP_DATA_SEND_INTERVAL_MS   100
+#define UDP_DATA_SEND_INTERVAL_MS   100
 
 // MAC address ELRS Backpack. Look it at Backpack internet html page.
 uint8_t UID[6] = {78, 82, 166, 251, 35, 234};
@@ -202,7 +202,7 @@ void processingTask(void* parameter) {
 
             if (millis() >= sendDataTime) {
                 // Parse CRSF data
-                if (parseCRSFPacket(packet.data, packet.len, &telemetry))) {
+                if (parseCRSFPacket(packet.data, packet.len, &telemetry)) {
                     uint8_t* ptrMavlinkData;
                     uint16_t dataLength;
                     // Build MAVLink stream
@@ -227,8 +227,8 @@ void printTelemetry(const TelemetryData_t* td) {
     Serial.println("\n══════════ ELRS TELEMETRY ══════════");
 
     // Верхняя строка: основные показатели
-    Serial.printf("📡 RSSI: %ddBm | 📦 Pkts: %lu | ⏱️ Age: %lums\n",
-                 td->currentRSSI, td->packetCount, millis() - td->lastUpdate);
+    Serial.printf("📦 Pkts: %lu | ⏱️ Age: %lums\n",
+                 td->packetCount, millis() - td->lastUpdate);
 
     // Батарея с графиком
     Serial.print("🔋 Battery: ");
@@ -245,9 +245,6 @@ void printTelemetry(const TelemetryData_t* td) {
     Serial.printf("✈️ Att: P%.0f° R%.0f° Y%.0f°\n",
                  td->pitch, td->roll, td->yaw);
 
-    // Связь
-    Serial.printf("📶 Link: UL %ddBm | DL %ddBm | LQ %d%%\n",
-                 td->uplinkRSSI1, td->downlinkRSSI, td->uplinkLinkQuality);
 
     // Режим полета
     if (strlen(td->flightMode) > 0) {
@@ -270,6 +267,7 @@ void printTelemetry(const TelemetryData_t* td) {
 }
 
 void loop() {
+/*
     static uint32_t lastDisplay = 0;
     static uint32_t lastTelemetryPrint = 0;
     static uint32_t lastBlink = 0;
@@ -316,4 +314,5 @@ void loop() {
         }
         lastTelemetryPrint = millis();
     }
+        */
 }

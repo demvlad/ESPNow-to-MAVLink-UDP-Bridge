@@ -73,7 +73,7 @@ uint32_t bigEndian24(const uint8_t* bytes) {
     return (bytes[0] << 16) | (bytes[1] << 8) | bytes[2];
 }
 
-int32_t bigEndian32(const int8_t* bytes) {
+int32_t bigEndian32(const uint8_t* bytes) {
     return (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3];
 }
 
@@ -94,7 +94,7 @@ uint8_t crsfCRC(const uint8_t* data, uint8_t len) {
 }
 
 // Data parser
-bool parseCRSFPacket(const uint8_t *data, int len, TelemetryData* telemetry) {
+bool parseCRSFPacket(const uint8_t *data, int len, TelemetryData_t* telemetry) {
     // Fast checking
     if (len < 11) return false;
     if (data[0] != 0x24 || data[1] != 0x58 || data[2] != 0x3C) return false;
@@ -125,12 +125,12 @@ bool parseCRSFPacket(const uint8_t *data, int len, TelemetryData* telemetry) {
 
         case CRSF_FRAMETYPE_GPS: // GPS
             if (payload_len >= 15) {
-                telemetryData.latitude = bigEndian32(payload) / 10000000.0;
-                telemetryData.longitude = bigEndian32(payload + 4) / 10000000.0;
-                telemetryData.groundSpeed = bigEndian16(payload + 8) * 0.1f;
-                telemetryData.heading = bigEndian16(payload + 10) * 0.01f;
-                telemetryData.altitude = bigEndian16(payload + 12) - 1000.0f; // TODO: Check  -1000
-                telemetryData.satellites = payload[14];
+                telemetry->latitude = bigEndian32(payload) / 10000000.0;
+                telemetry->longitude = bigEndian32(payload + 4) / 10000000.0;
+                telemetry->groundSpeed = bigEndian16(payload + 8) * 0.1f;
+                telemetry->heading = bigEndian16(payload + 10) * 0.01f;
+                telemetry->altitude = bigEndian16(payload + 12) - 1000.0f; // TODO: Check  -1000
+                telemetry->satellites = payload[14];
             }
             break;
 

@@ -35,7 +35,7 @@ bool buildMAVLinkDataStream(TelemetryData_t* telemetry, uint8_t** ptrMavlinkData
         // cog Course over ground (NOT heading, but direction of movement) in degrees * 100, 0.0..359.99 degrees. If unknown, set to: UINT16_MAX
         telemetry->heading * 100,
         // satellites_visible Number of satellites visible. If unknown, set to 255
-        telemetry->satellite,
+        telemetry->satellites,
         // Altitude [mm] (above WGS84, EGM96 ellipsoid). Positive for up.
         telemetry->altitude * 1000,
         // h_acc [mm] Position uncertainty
