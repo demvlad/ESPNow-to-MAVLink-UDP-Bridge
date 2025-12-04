@@ -63,6 +63,20 @@ typedef struct {
     int8_t downlinkSNR;           // SNR of downlink
 } crsfLinkStatistics_t;
 
+// Конвертация big-endian
+uint16_t bigEndian16(const uint8_t* bytes) {
+    return (bytes[0] << 8) | bytes[1];
+}
+
+
+uint32_t bigEndian24(const uint8_t* bytes) {
+    return (bytes[0] << 16) | (bytes[1] << 8) | bytes[2];
+}
+
+int32_t bigEndian32(const int8_t* bytes) {
+    return (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3];
+}
+
 // Функция проверки CRC (из ExpressLRS)
 uint8_t crsfCRC(const uint8_t* data, uint8_t len) {
     uint8_t crc = 0;
@@ -101,50 +115,47 @@ bool parseCRSFPacket(const uint8_t *data, int len, TelemetryData* telemetry) {
 
     // Обновление статистики
     telemetry->packetCount++;
-    if (frame_type < 256) telemetry->crsfPackets[frame_type]++;
+    if (frame_type < 256) {
+        telemetry->crsfPackets[frame_type]++;
+    }
     telemetry->lastUpdate = millis();
 
     // Обработка пакетов
     switch (frame_type) {
+
+        case CRSF_FRAMETYPE_GPS: // GPS
+            if (payload_len >= 15) {
+                telemetryData.latitude = bigEndian32(payload) / 10000000.0;
+                telemetryData.longitude = bigEndian32(payload + 4) / 10000000.0;
+                telemetryData.groundSpeed = bigEndian16(payload + 8) * 0.1f;
+                telemetryData.heading = bigEndian16(payload + 10) * 0.01f;
+                telemetryData.altitude = bigEndian16(payload + 12) - 1000.0f; // TODO: Check  -1000
+                telemetryData.satellites = payload[14];
+            }
+            break;
+
         case CRSF_FRAMETYPE_BATTERY_SENSOR: // Battery
             if (payload_len >= 8) {
-                uint16_t v = (payload[0] << 8) | payload[1];
-                uint16_t c = (payload[2] << 8) | payload[3];
-                telemetry->voltage = v * 0.1f;
-                telemetry->current = c * 0.1f;
-                telemetry->capacity = (payload[4] << 16) | (payload[5] << 8) | payload[6];
+                telemetry->voltage = bigEndian16(payload) * 0.1f;
+                telemetry->current = bigEndian16(payload + 2) * 0.1f;
+                telemetry->capacity = bigEndian24(payload + 4);
                 telemetry->batteryRemaining = payload[7];
             }
             break;
 
         case CRSF_FRAMETYPE_ATTITUDE: // Attitude
             if (payload_len >= 6) {
-                int16_t p = (int16_t)((payload[0] << 8) | payload[1]);
-                int16_t r = (int16_t)((payload[2] << 8) | payload[3]);
-                int16_t y = (int16_t)((payload[4] << 8) | payload[5]);
-                telemetry->pitch = p * 0.00572957795f; // rad/10000 → градусы
-                telemetry->roll = r * 0.00572957795f;
-                telemetry->yaw = y * 0.00572957795f;
-            }
-            break;
-
-        case CRSF_FRAMETYPE_LINK_STATISTICS: // Link Statistics
-            if (payload_len >= 10) {
-                telemetry->uplinkRSSI1 = (payload[0] / 2) - 120;
-                telemetry->uplinkRSSI2 = (payload[1] / 2) - 120;
-                telemetry->uplinkLinkQuality = payload[2];
-                telemetry->uplinkSNR = (int8_t)payload[3];
-                telemetry->downlinkRSSI = (payload[7] / 2) - 120;
-                telemetry->downlinkLinkQuality = payload[8];
-                telemetry->downlinkSNR = (int8_t)payload[9];
+                telemetry->pitch = bigEndian16(payload) * 0.00572957795f; // rad/10000 → градусы
+                telemetry->roll = bigEndian16(payload + 2) * 0.00572957795f;
+                telemetry->yaw = bigEndian16(payload + 4) * 0.00572957795f;
             }
             break;
 
         case CRSF_FRAMETYPE_FLIGHT_MODE: // Flight Mode
             if (payload_len >= 1) {
-                int l = payload_len < 16 ? payload_len : 16;
-                memcpy(telemetry->flightMode, payload, l);
-                telemetry->flightMode[l] = '\0';
+                int len = payload_len < 16 ? payload_len : 16;
+                memcpy(telemetry->flightMode, payload, len);
+                telemetry->flightMode[len] = '\0';
             }
             break;
     }
