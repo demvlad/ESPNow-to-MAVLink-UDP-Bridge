@@ -2,9 +2,12 @@
 #include <esp_now.h>
 #include <WiFi.h>
 #include <esp_wifi.h>
+
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/queue.h>
+
+#include <WiFiUdp.h>
 
 #include "crsf.h"
 #include "mavlink.h"
@@ -17,12 +20,18 @@
 #define QUEUE_SIZE 20
 #define PACKET_TIMEOUT_MS 200
 #define TELEMETRY_TIMEOUT_MS 3000
+UDP_DATA_SEND_INTERVAL_MS   100
 
 // MAC адрес как в рабочем коде
 uint8_t UID[6] = {78, 82, 166, 251, 35, 234}; // {0x4E, 0x52, 0xA6, 0xFB, 0x23, 0xEA}
 // Настройки точки доступа
 const char* ap_ssid = "mavlink";
 const char* ap_password = "12345678";  // Минимум 8 символов
+
+// Настройки UDP
+WiFiUDP udp;
+const uint16_t UDP_PORT = 14550; // GCS port
+IPAddress broadcastIP(255, 255, 255, 255);
 
 
 // Структура для очереди
@@ -35,7 +44,6 @@ typedef struct {
 
 // Глобальные объекты
 QueueHandle_t packetQueue = NULL;
-TelemetryData telemetry = {0};
 
 // Прототипы
 void IRAM_ATTR OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len);
@@ -88,13 +96,6 @@ void setup() {
         if(i < 5) Serial.print(":");
     }
     Serial.println("\n");
-
-    // Инициализация телеметрии
-    memset(&telemetry, 0, sizeof(telemetry));
-    telemetry.lastUpdate = 0;
-    telemetry.currentRSSI = -100;
-    telemetry.linkQuality = 0;
-    strcpy(telemetry.flightMode, "Unknown");
 
     // Создание очереди для FreeRTOS задачи
     packetQueue = xQueueCreate(QUEUE_SIZE, sizeof(ESPNowPacket));
@@ -187,6 +188,8 @@ void IRAM_ATTR OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data
 // Задача обработки
 void processingTask(void* parameter) {
     ESPNowPacket packet;
+    TelemetryData_t telemetry;
+    uint32_t sendDataTime = millis();;
 
     Serial.println("[TASK] Processing task started on Core 1");
 
@@ -201,11 +204,19 @@ void processingTask(void* parameter) {
                 continue;
             }
 
-            // Парсинг
-            parseCRSFPacket(packet.data, packet.len, &telemetry));
-
-            if (buildMAVLinkData(&telemetry, uint8_t** ptrMavlinkData, uint16_t* ptrDataLength)) {
-
+            if (millis() >= sendDataTime) {
+                // Парсинг
+                if (parseCRSFPacket(packet.data, packet.len, &telemetry))) {
+                    uint8_t* ptrMavlinkData;
+                    uint16_t dataLength;
+                    // Build MAVLink stream
+                    if (buildMAVLinkDataStream(&telemetry, &ptrMavlinkData, &dataLength)) {
+                        udp.beginPacket(broadcastIP, UDP_PORT);
+                        udp.write(ptrMavlinkData, dataLength);
+                        udp.endPacket();
+                        sendDataTime = millis() + UDP_DATA_SEND_INTERVAL_MS;
+                    }
+                }
             }
 
             digitalWrite(LED_BUILTIN, LOW);
@@ -215,7 +226,7 @@ void processingTask(void* parameter) {
     }
 }
 
-void printTelemetry(const TelemetryData* td) {
+void printTelemetry(const TelemetryData_t* td) {
     Serial.println("\n══════════ ELRS TELEMETRY ══════════");
 
     // Верхняя строка: основные показатели

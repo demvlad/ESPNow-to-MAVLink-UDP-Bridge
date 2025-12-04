@@ -4,7 +4,7 @@
 #define MAVLINK_SYSTEM_ID 1
 #define MAVLINK_COMPONENT_ID MAV_COMP_ID_AUTOPILOT1
 
-bool buildMAVLinkData(TelemetryData* telemetry, uint8_t** ptrMavlinkData, uint16_t* ptrDataLength) {
+bool buildMAVLinkDataStream(TelemetryData_t* telemetry, uint8_t** ptrMavlinkData, uint16_t* ptrDataLength) {
     mavlink_message_t mavMsg;
     static uint8_t mavBuffer[MAVLINK_MAX_PACKET_LEN * 4];
     uint16_t dataLength = 0;

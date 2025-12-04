@@ -1,7 +1,7 @@
 #include <Arduino.h>
 
 // Телеметрия
-struct TelemetryData {
+struct TelemetryData_t {
     float voltage;
     float current;
     uint32_t capacity;
