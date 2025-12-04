@@ -27,7 +27,7 @@ typedef enum {
     CRSF_FRAMETYPE_DISPLAYPORT_CMD = 0x7D,
 } crsf_frame_type_e;
 
-// Структуры данных CRSF
+// CRSF data struct
 typedef struct {
     uint16_t voltage;       // mV * 100
     uint16_t current;       // mA * 100
@@ -63,7 +63,7 @@ typedef struct {
     int8_t downlinkSNR;           // SNR of downlink
 } crsfLinkStatistics_t;
 
-// Конвертация big-endian
+// big-endian transform
 uint16_t bigEndian16(const uint8_t* bytes) {
     return (bytes[0] << 8) | bytes[1];
 }
@@ -77,7 +77,7 @@ int32_t bigEndian32(const int8_t* bytes) {
     return (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3];
 }
 
-// Функция проверки CRC (из ExpressLRS)
+// ExpressLRS CRC checking
 uint8_t crsfCRC(const uint8_t* data, uint8_t len) {
     uint8_t crc = 0;
     for (uint8_t i = 0; i < len; i++) {
@@ -93,18 +93,18 @@ uint8_t crsfCRC(const uint8_t* data, uint8_t len) {
     return crc;
 }
 
-// Парсинг пакета - ОСНОВНОЕ ИСПРАВЛЕНИЕ
+// Data parser
 bool parseCRSFPacket(const uint8_t *data, int len, TelemetryData* telemetry) {
-    // Быстрые проверки
+    // Fast checking
     if (len < 11) return false;
     if (data[0] != 0x24 || data[1] != 0x58 || data[2] != 0x3C) return false;
 
-    // CRSF данные начинаются с байта 8
+    // CRSF data start point
     const uint8_t *crsfData = data + 8;
     int crsfLen = len - 8;
     if (crsfLen < 4) return false;
 
-    // Чтение заголовка
+    // read header
     uint8_t frame_len = crsfData[1];
     uint8_t frame_type = crsfData[2];
 
@@ -113,14 +113,14 @@ bool parseCRSFPacket(const uint8_t *data, int len, TelemetryData* telemetry) {
     uint8_t payload_len = frame_len - 2;
     const uint8_t* payload = crsfData + 3;
 
-    // Обновление статистики
+    // Statistic update
     telemetry->packetCount++;
     if (frame_type < 256) {
         telemetry->crsfPackets[frame_type]++;
     }
     telemetry->lastUpdate = millis();
 
-    // Обработка пакетов
+    // Data packets handle
     switch (frame_type) {
 
         case CRSF_FRAMETYPE_GPS: // GPS
@@ -145,7 +145,7 @@ bool parseCRSFPacket(const uint8_t *data, int len, TelemetryData* telemetry) {
 
         case CRSF_FRAMETYPE_ATTITUDE: // Attitude
             if (payload_len >= 6) {
-                telemetry->pitch = bigEndian16(payload) * 0.00572957795f; // rad/10000 → градусы
+                telemetry->pitch = bigEndian16(payload) * 0.00572957795f; // rad/10000 → degree
                 telemetry->roll = bigEndian16(payload + 2) * 0.00572957795f;
                 telemetry->yaw = bigEndian16(payload + 4) * 0.00572957795f;
             }

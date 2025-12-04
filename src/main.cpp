@@ -16,25 +16,25 @@
   #define LED_BUILTIN 2  // GPIO2 для большинства ESP32
 #endif
 
-// Конфигурация
+// Config
 #define QUEUE_SIZE 20
 #define PACKET_TIMEOUT_MS 200
 #define TELEMETRY_TIMEOUT_MS 3000
 UDP_DATA_SEND_INTERVAL_MS   100
 
-// MAC адрес как в рабочем коде
-uint8_t UID[6] = {78, 82, 166, 251, 35, 234}; // {0x4E, 0x52, 0xA6, 0xFB, 0x23, 0xEA}
-// Настройки точки доступа
+// MAC address ELRS Backpack. Look it at Backpack internet html page.
+uint8_t UID[6] = {78, 82, 166, 251, 35, 234};
+// WIFI access point setup
 const char* ap_ssid = "mavlink";
-const char* ap_password = "12345678";  // Минимум 8 символов
+const char* ap_password = "12345678";  // It needs 8 symbols
 
-// Настройки UDP
+// UDP setup
 WiFiUDP udp;
 const uint16_t UDP_PORT = 14550; // GCS port
 IPAddress broadcastIP(255, 255, 255, 255);
 
 
-// Структура для очереди
+// ESPNow data
 typedef struct {
     uint8_t data[300];
     uint8_t len;
@@ -42,10 +42,8 @@ typedef struct {
 } ESPNowPacket;
 
 
-// Глобальные объекты
 QueueHandle_t packetQueue = NULL;
 
-// Прототипы
 void IRAM_ATTR OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len);
 void processingTask(void* parameter);
 
@@ -55,19 +53,19 @@ void setup() {
 
     Serial.println("=== ELRS CRSF Telemetry Parser ===");
 
-    // Устанавливаем MAC-адрес
+    // MAC address setup
     UID[0] &= ~0x01;
     WiFi.mode(WIFI_STA);
     if (esp_wifi_set_mac(WIFI_IF_STA, UID) != ESP_OK) {
         Serial.println("Failed to set MAC address!");
     }
 
-    // Инициализация ESP-NOW
+    // ESP-NOW init
     if (esp_now_init() == ESP_OK) {
         esp_now_register_recv_cb(OnDataRecv);
         Serial.println("ESP-NOW: Ready");
 
-        // Добавляем broadcast peer для приема от всех
+        // Add broadcast peer
         uint8_t broadcastMac[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
         esp_now_peer_info_t peerInfo = {};
         memcpy(peerInfo.peer_addr, broadcastMac, 6);
@@ -87,7 +85,7 @@ void setup() {
     Serial.print("My MAC Address: ");
     Serial.println(WiFi.macAddress());
 
-    // Проверяем реальный MAC
+    // The actual MAC checking
     uint8_t actualMAC[6];
     esp_wifi_get_mac(WIFI_IF_STA, actualMAC);
     Serial.print("Actual MAC: ");
@@ -97,7 +95,7 @@ void setup() {
     }
     Serial.println("\n");
 
-    // Создание очереди для FreeRTOS задачи
+    // Make quee for FreeRTOS task
     packetQueue = xQueueCreate(QUEUE_SIZE, sizeof(ESPNowPacket));
     if (packetQueue == NULL) {
         Serial.println("ERROR: Failed to create packet queue!");
@@ -105,7 +103,7 @@ void setup() {
     }
     Serial.printf("Queue created with size %d\n", QUEUE_SIZE);
 
-    // Запуск задачи обработки на ядре 1
+    // Run task on Core 1
     BaseType_t taskResult = xTaskCreatePinnedToCore(
         processingTask,
         "MAVLinkProc",
@@ -121,27 +119,27 @@ void setup() {
         ESP.restart();
     }
 
-    // Создаем точку доступа
+    // Create WIFI access point
     bool apStarted = WiFi.softAP(ap_ssid, ap_password);
 
     if (apStarted) {
-        Serial.println("Точка доступа создана успешно!");
+        Serial.println("WIFI access point is creatred successfull!");
         Serial.print("SSID: ");
         Serial.println(ap_ssid);
-        Serial.print("Пароль: ");
+        Serial.print("Password: ");
         Serial.println(ap_password);
 
-        // Получаем IP адрес точки доступа
+        // Get AP address
         IPAddress apIP = WiFi.softAPIP();
-        Serial.print("IP адрес AP: ");
+        Serial.print("IP address AP: ");
         Serial.println(apIP);
-        Serial.print("MAC адрес AP: ");
+        Serial.print("MAC address AP: ");
         Serial.println(WiFi.softAPmacAddress());
 
-        // Выводим информацию о сети
-        Serial.println("Подключитесь к этой точке доступа с другого устройства");
+        // Show network info
+        Serial.println("Connect to this WIFI access point from other gaget");
     } else {
-        Serial.println("Ошибка создания точки доступа!");
+        Serial.println("WIFI AP creating error");
         while(1) delay(1000);
     }
 
@@ -151,27 +149,25 @@ void setup() {
     Serial.println("Waiting for ELRS telemetry...\n");
 }
 
-// Callback с правильной сигнатурой
+// Callback to read ESPNow
 void IRAM_ATTR OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
-
-    // Быстрая проверка
+    // Fast data checking
     if (data_len < 11 || data_len > 300 || packetQueue == NULL) return;
 
-    // Проверка ELRS синхробайтов
+    // Sync bytes checking
     if (data[0] != 0x24 || data[1] != 0x58 || data[2] != 0x3C) return;
 
     ESPNowPacket packet;
     packet.len = data_len;
     packet.timestamp = micros();
 
-    // Копируем данные
     memcpy(packet.data, data, data_len);
 
-    // Отправляем в очередь из прерывания
+    // Add packet to quee
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     BaseType_t result = xQueueSendToBackFromISR(packetQueue, &packet, &xHigherPriorityTaskWoken);
 
-    // Обработка переполнения очереди
+    // Handle Quee overflow
     if (result == errQUEUE_FULL) {
         ESPNowPacket dummy;
         xQueueReceiveFromISR(packetQueue, &dummy, &xHigherPriorityTaskWoken);
@@ -185,7 +181,7 @@ void IRAM_ATTR OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data
 
 
 
-// Задача обработки
+// Data processinf task
 void processingTask(void* parameter) {
     ESPNowPacket packet;
     TelemetryData_t telemetry;
@@ -198,19 +194,20 @@ void processingTask(void* parameter) {
 
             digitalWrite(LED_BUILTIN, HIGH);
 
-            // Проверка таймаута
+            // Check timeout
             if ((micros() - packet.timestamp) / 1000 > PACKET_TIMEOUT_MS) {
                 digitalWrite(LED_BUILTIN, LOW);
                 continue;
             }
 
             if (millis() >= sendDataTime) {
-                // Парсинг
+                // Parse CRSF data
                 if (parseCRSFPacket(packet.data, packet.len, &telemetry))) {
                     uint8_t* ptrMavlinkData;
                     uint16_t dataLength;
                     // Build MAVLink stream
                     if (buildMAVLinkDataStream(&telemetry, &ptrMavlinkData, &dataLength)) {
+                        // Send MAVLink stream to UDP
                         udp.beginPacket(broadcastIP, UDP_PORT);
                         udp.write(ptrMavlinkData, dataLength);
                         udp.endPacket();
@@ -278,7 +275,7 @@ void loop() {
     static uint32_t lastBlink = 0;
     static bool ledState = false;
 
-    // Мигаем LED когда активны пакеты
+    // Blink LED while data are reading
     if (millis() - telemetry.lastUpdate < 100) {
         if (millis() - lastBlink >= 50) {
             ledState = !ledState;
@@ -293,7 +290,7 @@ void loop() {
         }
     }
 
-    // Вывод статуса каждую секунду
+    // Show status data
     if (millis() - lastDisplay >= 1000) {
         unsigned long age = millis() - telemetry.lastUpdate;
 
@@ -312,7 +309,7 @@ void loop() {
         lastDisplay = millis();
     }
 
-    // Вывод подробной телеметрии каждые 5 секунд
+    // Show full telemetries data
     if (millis() - lastTelemetryPrint >= 5000) {
         if (telemetry.packetCount > 0 && millis() - telemetry.lastUpdate < 2000) {
             printTelemetry(&telemetry);
