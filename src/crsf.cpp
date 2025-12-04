@@ -125,11 +125,11 @@ bool parseCRSFPacket(const uint8_t *data, int len, TelemetryData_t* telemetry) {
 
         case CRSF_FRAMETYPE_GPS: // GPS
             if (payload_len >= 15) {
-                telemetry->latitude = bigEndian32(payload) / 10000000.0;
-                telemetry->longitude = bigEndian32(payload + 4) / 10000000.0;
-                telemetry->groundSpeed = bigEndian16(payload + 8) * 0.1f;
-                telemetry->heading = bigEndian16(payload + 10) * 0.01f;
-                telemetry->altitude = bigEndian16(payload + 12) - 1000.0f; // TODO: Check  -1000
+                telemetry->latitude = bigEndian32(payload) / 10000000.0; // [degree]
+                telemetry->longitude = bigEndian32(payload + 4) / 10000000.0; // [degree]
+                telemetry->groundSpeed = bigEndian16(payload + 8) / 10.0; // [m/s]
+                telemetry->heading = bigEndian16(payload + 10) * 0.01f; // [degree]
+                telemetry->altitude = bigEndian16(payload + 12) - 1000.0f; // [m] The BF CRFS telemetry add  +1000
                 telemetry->satellites = payload[14];
             }
             break;
@@ -145,9 +145,9 @@ bool parseCRSFPacket(const uint8_t *data, int len, TelemetryData_t* telemetry) {
 
         case CRSF_FRAMETYPE_ATTITUDE: // Attitude
             if (payload_len >= 6) {
-                telemetry->pitch = bigEndian16(payload) * 0.00572957795f; // rad/10000 → degree
-                telemetry->roll = bigEndian16(payload + 2) * 0.00572957795f;
-                telemetry->yaw = bigEndian16(payload + 4) * 0.00572957795f;
+                telemetry->pitch = bigEndian16(payload) / 10000; // rad*10000 → rad
+                telemetry->roll = bigEndian16(payload + 2) / 10000; // rad*10000 → rad
+                telemetry->yaw = bigEndian16(payload + 4) / 10000; // rad*10000 → rad
             }
             break;
 

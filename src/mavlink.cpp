@@ -25,19 +25,19 @@ bool buildMAVLinkDataStream(TelemetryData_t* telemetry, uint8_t** ptrMavlinkData
         // lon Longitude in 1E7 degrees
         telemetry->longitude * 1e7,
         // alt Altitude in 1E3 meters (millimeters) above MSL
-        telemetry->altitude * 1000,
+        telemetry->altitude * 1000.0f,
         // eph GPS HDOP horizontal dilution of position (unitless * 100). If unknown, set to: UINT16_MAX
         UINT16_MAX,
         // epv GPS VDOP vertical dilution of position (unitless * 100). If unknown, set to: UINT16_MAX
         UINT16_MAX,
         // vel GPS ground speed (m/s * 100). If unknown, set to: UINT16_MAX
-        telemetry->groundSpeed / 3.6 * 100,
+        telemetry->groundSpeed * 100.0f,
         // cog Course over ground (NOT heading, but direction of movement) in degrees * 100, 0.0..359.99 degrees. If unknown, set to: UINT16_MAX
-        telemetry->heading * 100,
+        telemetry->heading * 100.0f,
         // satellites_visible Number of satellites visible. If unknown, set to 255
         telemetry->satellites,
         // Altitude [mm] (above WGS84, EGM96 ellipsoid). Positive for up.
-        telemetry->altitude * 1000,
+        telemetry->altitude * 1000.0f,
         // h_acc [mm] Position uncertainty
         UINT32_MAX,
         // v_acc [mm] Altitude uncertainty
@@ -54,11 +54,11 @@ bool buildMAVLinkDataStream(TelemetryData_t* telemetry, uint8_t** ptrMavlinkData
         // time_boot_ms Timestamp (milliseconds since system boot)
         millis(),
         // roll Roll angle (rad)
-        telemetry->roll / 57.3,
+        telemetry->roll,
         // pitch Pitch angle (rad)
-        telemetry->pitch / 57.3,
+        telemetry->pitch,
         // yaw Yaw angle (rad)
-        telemetry->yaw / 57.3,
+        telemetry->yaw,
         // rollspeed Roll angular speed (rad/s)
         0,
         // pitchspeed Pitch angular speed (rad/s)
