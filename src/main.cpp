@@ -41,6 +41,9 @@ typedef struct {
     uint32_t timestamp;
 } ESPNowPacket;
 
+TelemetryData_t telemetry;
+
+
 
 QueueHandle_t packetQueue = NULL;
 
@@ -184,7 +187,6 @@ void IRAM_ATTR OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data
 // Data processinf task
 void processingTask(void* parameter) {
     ESPNowPacket packet;
-    TelemetryData_t telemetry;
     uint32_t sendDataTime = millis();;
 
     Serial.println("[TASK] Processing task started on Core 1");
@@ -267,7 +269,6 @@ void printTelemetry(const TelemetryData_t* td) {
 }
 
 void loop() {
-/*
     static uint32_t lastDisplay = 0;
     static uint32_t lastTelemetryPrint = 0;
     static uint32_t lastBlink = 0;
@@ -292,8 +293,8 @@ void loop() {
     if (millis() - lastDisplay >= 1000) {
         unsigned long age = millis() - telemetry.lastUpdate;
 
-        Serial.printf("[STATUS] Age:%lums RSSI:%d Packets:%lu Queue:%d/%d",
-                     age, telemetry.currentRSSI, telemetry.packetCount,
+        Serial.printf("[STATUS] Age:%lums Packets:%lu Queue:%d/%d",
+                     age, telemetry.packetCount,
                      uxQueueMessagesWaiting(packetQueue), QUEUE_SIZE);
 
         if (age > TELEMETRY_TIMEOUT_MS) {
@@ -314,5 +315,4 @@ void loop() {
         }
         lastTelemetryPrint = millis();
     }
-        */
 }
