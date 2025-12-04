@@ -8,4 +8,4 @@ The src\config.h file contains main settings.
 
 Set yours ELRS TX UUID, what generates from binding phrase. You can see it on ELRS TX html page.
 
-uint8_t UID[6] = {78, 82, 166, 251, 35, 234}; // change these UID on yours TX 
+uint8_t UID[6] = {78, 82, 166, 251, 35, 234}; // change this UID on yours TX values.
