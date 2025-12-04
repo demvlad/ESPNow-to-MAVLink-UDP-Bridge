@@ -64,12 +64,12 @@ typedef struct {
 } crsfLinkStatistics_t;
 
 // big-endian transform
-uint16_t bigEndian16(const uint8_t* bytes) {
+int16_t bigEndian16(const uint8_t* bytes) {
     return (bytes[0] << 8) | bytes[1];
 }
 
 
-uint32_t bigEndian24(const uint8_t* bytes) {
+int32_t bigEndian24(const uint8_t* bytes) {
     return (bytes[0] << 16) | (bytes[1] << 8) | bytes[2];
 }
 
@@ -127,7 +127,7 @@ bool parseCRSFPacket(const uint8_t *data, int len, TelemetryData_t* telemetry) {
             if (payload_len >= 15) {
                 telemetry->latitude = bigEndian32(payload) / 10000000.0; // [degree]
                 telemetry->longitude = bigEndian32(payload + 4) / 10000000.0; // [degree]
-                telemetry->groundSpeed = bigEndian16(payload + 8) / 10.0; // [m/s]
+                telemetry->groundSpeed = bigEndian16(payload + 8) / 10.0f; // [m/s]
                 telemetry->heading = bigEndian16(payload + 10) * 0.01f; // [degree]
                 telemetry->altitude = bigEndian16(payload + 12) - 1000.0f; // [m] The BF CRFS telemetry add  +1000
                 telemetry->satellites = payload[14];
@@ -145,9 +145,9 @@ bool parseCRSFPacket(const uint8_t *data, int len, TelemetryData_t* telemetry) {
 
         case CRSF_FRAMETYPE_ATTITUDE: // Attitude
             if (payload_len >= 6) {
-                telemetry->pitch = bigEndian16(payload) / 10000; // rad*10000 → rad
-                telemetry->roll = bigEndian16(payload + 2) / 10000; // rad*10000 → rad
-                telemetry->yaw = bigEndian16(payload + 4) / 10000; // rad*10000 → rad
+                telemetry->pitch = bigEndian16(payload) / 10000.0f; // rad*10000 → rad
+                telemetry->roll = bigEndian16(payload + 2) / 10000.0f; // rad*10000 → rad
+                telemetry->yaw = bigEndian16(payload + 4) / 10000.0f; // rad*10000 → rad
             }
             break;
 

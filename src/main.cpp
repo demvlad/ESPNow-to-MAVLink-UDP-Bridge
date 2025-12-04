@@ -241,7 +241,7 @@ void printTelemetry(const TelemetryData_t* td) {
 
     // Attitude в компактном виде
     Serial.printf("✈️ Att: P%.0f° R%.0f° Y%.0f°\n",
-                 td->pitch, td->roll, td->yaw);
+                 td->pitch * 57.3, td->roll * 57.3, td->yaw * 57.3);
 
 
     // Режим полета
