@@ -37,7 +37,7 @@ typedef struct {
     uint32_t timestamp;
 } ESPNowPacket;
 
-TelemetryData_t telemetry;
+TelemetryData_t telemetriesData;
 
 
 
@@ -198,23 +198,21 @@ void processingTask(void* parameter) {
                 continue;
             }
 
+            // Parse CRSF data
+            parseCRSFPacket(packet.data, packet.len, &telemetriesData);
+
             if (millis() >= sendDataTime) {
-                // Parse CRSF data
-                if (parseCRSFPacket(packet.data, packet.len, &telemetry)) {
-                    uint8_t* ptrMavlinkData;
-                    uint16_t dataLength;
-                    // Build MAVLink stream
-                    if (buildMAVLinkDataStream(&telemetry, &ptrMavlinkData, &dataLength)) {
-                        // Send MAVLink stream to UDP
-                        udp.beginPacket(broadcastIP, UDP_PORT);
-                        udp.write(ptrMavlinkData, dataLength);
-                        udp.endPacket();
-                        sendDataTime = millis() + UDP_DATA_SEND_INTERVAL_MS;
-                    }
+                uint8_t* ptrMavlinkData;
+                uint16_t dataLength;
+                // Build MAVLink stream
+                if (buildMAVLinkDataStream(&telemetriesData, &ptrMavlinkData, &dataLength)) {
+                    // Send MAVLink stream to UDP
+                    udp.beginPacket(broadcastIP, UDP_PORT);
+                    udp.write(ptrMavlinkData, dataLength);
+                    udp.endPacket();
+                    sendDataTime = millis() + UDP_DATA_SEND_INTERVAL_MS;
                 }
             }
-
-            digitalWrite(LED_BUILTIN, LOW);
         }
 
         vTaskDelay(1 / portTICK_PERIOD_MS);
@@ -272,7 +270,7 @@ void loop() {
     static bool ledState = false;
 
     // Blink LED while data are reading
-    if (millis() - telemetry.lastUpdate < 100) {
+    if (millis() - telemetriesData.lastUpdate < 100) {
         if (millis() - lastBlink >= 50) {
             ledState = !ledState;
             digitalWrite(LED_BUILTIN, ledState);
@@ -288,10 +286,10 @@ void loop() {
 
     // Show status data
     if (millis() - lastDisplay >= 1000) {
-        unsigned long age = millis() - telemetry.lastUpdate;
+        unsigned long age = millis() - telemetriesData.lastUpdate;
 
         Serial.printf("[STATUS] Age:%lums Packets:%lu Queue:%d/%d",
-                     age, telemetry.packetCount,
+                     age, telemetriesData.packetCount,
                      uxQueueMessagesWaiting(packetQueue), QUEUE_SIZE);
 
         if (age > TELEMETRY_TIMEOUT_MS) {
@@ -307,8 +305,8 @@ void loop() {
 
     // Show full telemetries data
     if (millis() - lastTelemetryPrint >= 5000) {
-        if (telemetry.packetCount > 0 && millis() - telemetry.lastUpdate < 2000) {
-            printTelemetry(&telemetry);
+        if (telemetriesData.packetCount > 0 && millis() - telemetriesData.lastUpdate < 2000) {
+            printTelemetry(&telemetriesData);
         }
         lastTelemetryPrint = millis();
     }
