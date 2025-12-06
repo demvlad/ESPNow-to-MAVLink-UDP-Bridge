@@ -50,6 +50,28 @@ bool buildMAVLinkDataStream(TelemetryData_t* telemetry, uint8_t** ptrMavlinkData
             //Yaw in earth frame from north. Use 0 if this GPS does not provide yaw - Unused
             0);
         dataLength += mavlink_msg_to_send_buffer(mavBuffer + dataLength, &mavMsg);
+
+        mavlink_msg_global_position_int_pack(MAVLINK_SYSTEM_ID, MAVLINK_COMPONENT_ID, &mavMsg,
+            // time_usec Timestamp (microseconds since UNIX epoch or microseconds since system boot)
+            micros(),
+            // lat Latitude in 1E7 degrees
+            telemetry->gps.latitude * 1e7,
+            // lon Longitude in 1E7 degrees
+             telemetry->gps.longitude * 1e7,
+            // alt Altitude in 1E3 meters (millimeters) above MSL
+            telemetry->gps.altitude * 1000.0f,
+            // relative_alt Altitude above ground in meters, expressed as * 1000 (millimeters)
+            telemetry->gps.altitude * 1000.0f, // do not have AGL, to use MSL instead of
+            // Ground X Speed (Latitude), expressed as m/s * 100
+            telemetry->gps.groundSpeed * cos(telemetry->gps.heading / 57.3) * 100,
+            // Ground Y Speed (Longitude), expressed as m/s * 100
+            telemetry->gps.groundSpeed * sin(telemetry->gps.heading / 57.3) * 100,
+            // Ground Z Speed (Altitude), expressed as m/s * 100
+            0,  // Do not have Vz
+            // heading Current heading in degrees, in compass units (0..360, 0=north)
+            telemetry->gps.heading
+        );
+        dataLength += mavlink_msg_to_send_buffer(mavBuffer + dataLength, &mavMsg);
     }
 
     if (telemetry->attitude.enabled) {
