@@ -136,7 +136,9 @@ void setup() {
         Serial.println(WiFi.softAPmacAddress());
 
         // Show network info
-        Serial.println("Connect to this WIFI access point from other gaget");
+        Serial.println("Connect to this WIFI access point from other gadget");
+        Serial.println("Turn on ELRS transmitter with backpacks ESPNow");
+        Serial.println("Receive MAVLink packets on 14550 UDP port");
     } else {
         Serial.println("WIFI AP creating error");
         while(1) delay(1000);
