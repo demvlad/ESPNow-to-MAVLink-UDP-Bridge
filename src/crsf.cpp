@@ -160,7 +160,6 @@ bool parseCRSFPacket(const uint8_t *data, int len, TelemetryData_t* telemetry) {
                 int len = payload_len < 16 ? payload_len : 16;
                 memcpy(telemetry->flightMode.mode, payload, len);
                 telemetry->flightMode.mode[len] = '\0';
-                telemetry->flightMode.armed = true; // TODO: perse mode string to define arm flag
             }
             break;
     }

@@ -4,6 +4,24 @@
 #define MAVLINK_SYSTEM_ID 1
 #define MAVLINK_COMPONENT_ID MAV_COMP_ID_AUTOPILOT1
 
+bool isArmed(const char* flightModeString) {
+    // flightModeString - the full flight mode string from CRSF telemetry
+
+    uint32_t len = strlen(flightModeString);
+    if (len == 0) return false;
+
+    // Check the last symbol
+    char lastChar = flightModeString[len - 1];
+
+    // If last sybol is *, !, ? then -> DISARMED
+    if (lastChar == '*' || lastChar == '!' || lastChar == '?') {
+        return false;
+    }
+
+    // Else -> ARMED
+    return true;
+}
+
 bool buildMAVLinkDataStream(TelemetryData_t* telemetry, uint8_t** ptrMavlinkData, uint16_t* ptrDataLength) {
     mavlink_message_t mavMsg;
     static uint8_t mavBuffer[MAVLINK_MAX_PACKET_LEN * 4];
@@ -103,7 +121,7 @@ bool buildMAVLinkDataStream(TelemetryData_t* telemetry, uint8_t** ptrMavlinkData
         // custom_mode A bitfield for use for autopilot-specific flags.
         0,
         // system_status System status flag, see MAV_STATE ENUM
-        MAV_STATE_ACTIVE);
+        isArmed(telemetry->flightMode.mode) ?  MAV_STATE_ACTIVE : MAV_STATE_STANDBY);
     dataLength += mavlink_msg_to_send_buffer(mavBuffer + dataLength, &mavMsg);
 
     if (telemetry->battery.enabled) {

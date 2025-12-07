@@ -20,7 +20,6 @@ struct TelemetryData_t {
     struct {
         bool enabled;
         char mode[17];
-        bool armed;
     } flightMode;
     struct {
         bool enabled;
