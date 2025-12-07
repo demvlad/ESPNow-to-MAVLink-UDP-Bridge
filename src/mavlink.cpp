@@ -121,7 +121,8 @@ bool buildMAVLinkDataStream(TelemetryData_t* telemetry, uint8_t** ptrMavlinkData
         // custom_mode A bitfield for use for autopilot-specific flags.
         0,
         // system_status System status flag, see MAV_STATE ENUM
-        isArmed(telemetry->flightMode.mode) ?  MAV_STATE_ACTIVE : MAV_STATE_STANDBY);
+        telemetry->flightMode.enabled ? (isArmed(telemetry->flightMode.mode) ?  MAV_STATE_ACTIVE : MAV_STATE_STANDBY) : MAV_STATE_ACTIVE
+    );
     dataLength += mavlink_msg_to_send_buffer(mavBuffer + dataLength, &mavMsg);
 
     if (telemetry->battery.enabled) {
