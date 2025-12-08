@@ -16,7 +16,7 @@ Go to setup web page: http://192.168.4.1/
 Set ESP32 MAC address at setup page like yours ELRS TX UUID, what you can look at ELRS TX web page. (It is generated from yours ELRS binding phrase). 
 ![elrs_page](https://github.com/user-attachments/assets/e987d86e-125b-4f75-9def-61cf3009950c)
 
-**Using with ELRS TX:**
+**Using with ELRS TX CRSF telemetry:**
 
 Turn on ELRS transmitter with backpacs ESPNow telemetry enabled. 
 
