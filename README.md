@@ -1,8 +1,9 @@
 This ESP32 program reads ESPNow messages from ELRS backpack (https://www.expresslrs.org/software/backpack-telemetry/), transform CRSF telemetries frames to MAVLink packets and sends MAVLink data by UDP on port 14550.
 
-Upload program into your ESP32 device.
 
 **Setup:**
+
+Upload program into your ESP32 device.
 
 The programm creates WIFI access point with name "mavlink" and password "12345678".
 
@@ -23,4 +24,4 @@ Turn on drone with CRSF telemetry enabled.
 
 Connect to 'mavlink' WIFI access point, what is created ESP32 device. The password is 12345678.
 
-Receive MAVLink telemetry packets by 14550 UDP port by using MissionPlanner or other GCS program.
+Receive MAVLink telemetry packets on 14550 UDP port by using MissionPlanner or other GCS program.
