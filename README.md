@@ -2,15 +2,15 @@ This is a ESP32 program.
 
 It reads ESPNow messages from ELRS backpack (https://www.expresslrs.org/software/backpack-telemetry/), transform CRSF telemetries frames to MAVLink packets and sends MAVLink data by UDP on port 14550.
 
-Build programm and load it to your ESP32 device.
-
-Run ESP32 device.
+Upload program into your ESP32 device.
 
 The programm creates WIFI access point with name "mavlink" and password "12345678".
 
 Connect to WIFI access point.
 
 Go to setup web page: http://192.168.4.1/
+![setup-web-page](https://github.com/user-attachments/assets/cbd0d67f-2b58-4b16-b02a-48d874ea20a6)
+
 
 Set ESP32 MAC address at setup page like yours ELRS TX UUID, what you can look at ELRS TX web page. (It is generated from yours ELRS binding phrase). 
 
