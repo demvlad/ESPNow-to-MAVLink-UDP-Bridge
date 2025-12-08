@@ -2,9 +2,6 @@
 #define CONFIG_H
 #include <Arduino.h>
 
-// MAC address ELRS Backpack. Look it at Backpack web page.
-uint8_t UID[6] = {78, 82, 166, 251, 35, 234};
-
 // WIFI access point setup
 const char* ap_ssid = "mavlink";
 const char* ap_password = "12345678";  // It needs 8 symbols

@@ -8,6 +8,7 @@
 #include <freertos/queue.h>
 
 #include <WiFiUdp.h>
+#include "web-server.h"
 
 #include "crsf.h"
 #include "mavlink.h"
@@ -29,7 +30,8 @@
 WiFiUDP udp;
 IPAddress broadcastIP(255, 255, 255, 255);
 
-
+// MAC address ELRS Backpack. Look it at Backpack web page.
+uint8_t UID[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 // ESPNow data
 typedef struct {
     uint8_t data[300];
@@ -55,6 +57,7 @@ void setup() {
     // MAC address setup
     UID[0] &= ~0x01;
     WiFi.mode(WIFI_STA);
+    loadMacFromStorage(UID);
     if (esp_wifi_set_mac(WIFI_IF_STA, UID) != ESP_OK) {
         Serial.println("Failed to set MAC address!");
     }
@@ -100,7 +103,6 @@ void setup() {
         Serial.println("ERROR: Failed to create packet queue!");
         ESP.restart();
     }
-    Serial.printf("Queue created with size %d\n", QUEUE_SIZE);
 
     // Run task on Core 1
     BaseType_t taskResult = xTaskCreatePinnedToCore(
@@ -127,13 +129,11 @@ void setup() {
         Serial.println(ap_ssid);
         Serial.print("Password: ");
         Serial.println(ap_password);
-
         // Get AP address
         IPAddress apIP = WiFi.softAPIP();
         Serial.print("IP address AP: ");
         Serial.println(apIP);
-        Serial.print("MAC address AP: ");
-        Serial.println(WiFi.softAPmacAddress());
+        Serial.println("-------------------------------------------------");
 
         // Show network info
         Serial.println("Connect to this WIFI access point from other gadget");
@@ -143,6 +143,8 @@ void setup() {
         Serial.println("WIFI AP creating error");
         while(1) delay(1000);
     }
+
+    webSwerverSetup();
 
     pinMode(LED_BUILTIN, OUTPUT);
     digitalWrite(LED_BUILTIN, LOW);
@@ -265,6 +267,7 @@ void printTelemetry(const TelemetryData_t* td) {
 }
 
 void loop() {
+    webServerRun();
 #ifdef DEBUG_TO_LOG
     static uint32_t lastDisplay = 0;
     static uint32_t lastTelemetryPrint = 0;
