@@ -8,6 +8,8 @@
 #include <freertos/queue.h>
 
 #include <WiFiUdp.h>
+#include <string.h>
+
 #include "web-server.h"
 
 #include "crsf.h"
@@ -58,7 +60,8 @@ void setup() {
     UID[0] &= ~0x01;
     WiFi.mode(WIFI_AP);
     loadMacFromStorage(UID);
-    if (esp_wifi_set_mac(WIFI_IF_AP, UID) != ESP_OK) {
+    loadWifiFromStorage();
+    if (esp_wifi_set_mac(WIFI_IF_STA, UID) != ESP_OK) {
         Serial.println("Failed to set MAC address!");
     }
 
@@ -120,28 +123,48 @@ void setup() {
         ESP.restart();
     }
 
-    // Create WIFI access point
-    bool apStarted = WiFi.softAP(ap_ssid, ap_password);
+    if (!strcmp(config.wifi_mode, "ap")) {
+      // Create WIFI access point
+      bool apStarted = WiFi.softAP(config.wifi_ssid, config.wifi_password);
 
-    if (apStarted) {
-        Serial.println("WIFI access point is creatred successfull!");
-        Serial.print("SSID: ");
-        Serial.println(ap_ssid);
-        Serial.print("Password: ");
-        Serial.println(ap_password);
-        // Get AP address
-        IPAddress apIP = WiFi.softAPIP();
-        Serial.print("IP address AP: ");
-        Serial.println(apIP);
-        Serial.println("-------------------------------------------------");
+      if (apStarted) {
+          Serial.println("WIFI access point is creatred successfull!");
+          Serial.print("SSID: ");
+          Serial.println(config.wifi_ssid);
+          Serial.print("Password: ");
+          Serial.println(config.wifi_password);
+          // Get AP address
+          IPAddress apIP = WiFi.softAPIP();
+          Serial.print("IP address AP: ");
+          Serial.println(apIP);
+          Serial.println("-------------------------------------------------");
 
-        // Show network info
-        Serial.println("Connect to this WIFI access point from other gadget");
-        Serial.println("Turn on ELRS transmitter with backpacks ESPNow");
-        Serial.println("Receive MAVLink packets on 14550 UDP port");
+          // Show network info
+          Serial.println("Connect to this WIFI access point from other gadget");
+          Serial.println("Turn on ELRS transmitter with backpacks ESPNow");
+          Serial.println("Receive MAVLink packets on 14550 UDP port");
+      } else {
+          Serial.println("WIFI AP creating error");
+          while(1) delay(1000);
+      }
     } else {
-        Serial.println("WIFI AP creating error");
-        while(1) delay(1000);
+      WiFi.begin(config.wifi_ssid, config.wifi_password);
+
+      int attempts = 0;
+      while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+          delay(500);
+          Serial.print(".");
+          attempts++;
+      }
+
+      // Проверяем результат
+      if (WiFi.status() == WL_CONNECTED) {
+          Serial.println("\nConnected successfully!");
+          Serial.print("IP address: ");
+          Serial.println(WiFi.localIP());
+      } else {
+          Serial.println("\nFailed to connect!");
+      }
     }
 
     webSwerverSetup();
