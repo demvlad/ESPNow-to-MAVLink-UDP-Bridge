@@ -56,9 +56,9 @@ void setup() {
 
     // MAC address setup
     UID[0] &= ~0x01;
-    WiFi.mode(WIFI_STA);
+    WiFi.mode(WIFI_AP);
     loadMacFromStorage(UID);
-    if (esp_wifi_set_mac(WIFI_IF_STA, UID) != ESP_OK) {
+    if (esp_wifi_set_mac(WIFI_IF_AP, UID) != ESP_OK) {
         Serial.println("Failed to set MAC address!");
     }
 
