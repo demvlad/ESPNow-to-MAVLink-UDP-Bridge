@@ -1,12 +1,8 @@
-#include <WebServer.h>
-#include <Preferences.h>
+﻿#include <WebServer.h>
 #include <ArduinoJson.h>
 #include "config.h"
 
 static WebServer server(80);
-Preferences preferences;
-
-Config config;
 
 // HTML page to input MAC-Address
 const char htmlPage[] PROGMEM = R"rawliteral(
@@ -133,7 +129,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
       margin-bottom: 5px;
     }
     label {
-      min-width: 80px; /* Фиксированная ширина для выравнивания */
+      min-width: 80px;
     }
 
     .wifi-input, select.wifi-input {
@@ -144,7 +140,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
       font-size: 12px;
       font-family: monospace;
       letter-spacing: 1px;
-      box-sizing: border-box !important; /* ← Это ключевое! */
+      box-sizing: border-box !important;
     }
 
   </style>
@@ -175,21 +171,26 @@ const char htmlPage[] PROGMEM = R"rawliteral(
     <h2>🔧 WIFI setup</h2>
     <div class="input-group">
       <div class="input-row">
-        <label for="wifi-mode">WiFi Mode</label>
-        <select class="wifi-input" id="wifi-mode">
+        <label for="wifi_mode">WiFi Mode</label>
+        <select class="wifi-input" id="wifi_mode" onchange="wifiModeChange(event)">
           <option value="ap">WiFi Access Point</option>
           <option value="sta">WiFi Client (Connect to network)</option>
         </select>
       </div>
       <div class="input-row">
-        <label for="ssid">SSID</label>
-        <input class="wifi-input" type="text" id="ssid"
+        <label for="wifi_ssid">SSID</label>
+        <input class="wifi-input" type="text" id="wifi_ssid"
                title="WIFI SSID">
       </div>
       <div class="input-row">
-        <label for="password">Password</label>
-        <input class="wifi-input" type="text" id="password"
+        <label for="wifi_password">Password</label>
+        <input class="wifi-input" type="text" id="wifi_password"
                title="WIFI password">
+      </div>
+      <div class="input-row">
+        <label for="wifi_channel">Channel</label>
+        <input class="wifi-input" type="text" id="wifi_channel"
+               title="WIFI channel">
       </div>
       <div class="button-group">
         <button class="btn-save" onclick="saveWifi()">💾 Save WIFI</button>
@@ -200,6 +201,24 @@ const char htmlPage[] PROGMEM = R"rawliteral(
   </div>
 
   <script>
+
+    // Disable ssid, password change in AP mode
+    function wifiModeChange(event) {
+      const ssid_elem = document.getElementById('wifi_ssid');
+      const password_elem = document.getElementById('wifi_password');
+      if (event.value == "ap") {
+        ssid_elem.readOnly = true;
+        ssid_elem.style.cursor = 'not-allowed';
+        password_elem.readOnly = true;
+        password_elem.style.cursor = 'not-allowed';
+      } else {
+        ssid_elem.readOnly = false;
+        ssid_elem.style.cursor = 'text';
+        password_elem.readOnly = false;
+        password_elem.style.cursor = 'text';
+      }
+    }
+
     // Get current MAC by page loading
     window.onload = function() {
       getCurrentMac();
@@ -230,8 +249,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         })
         .then(data => {
           document.getElementById('wifi_ssid').value = data.wifi_ssid;
-          document.getElementById('password').value = data.password;
-          document.getElementById('wifi-mode').value = data.wifi_mode;
+          document.getElementById('wifi_password').value = data.wifi_password;
+          document.getElementById('wifi_mode').value = data.wifi_mode;
+          document.getElementById('wifi_channel').value = data.wifi_channel;
         })
         .catch(error => {
           showStatus('Error retrieving WIFI settings', 'error');
@@ -248,7 +268,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         return;
       }
 
-      fetch('/save', {
+      fetch('/save_mac', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -279,9 +299,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
     // Save new WIFI
     function saveWifi() {
-      const wifiMode = document.getElementById('wifi-mode').value;
+      const wifiMode = document.getElementById('wifi_mode').value;
       const wifiSSID = document.getElementById('wifi_ssid').value.trim();
-      const wifiPassword = document.getElementById('password').value.trim();
+      const wifiPassword = document.getElementById('wifi_password').value.trim();
+      const wifiChannel = document.getElementById('wifi_channel').value;
 
       // Validate WIFI
       if (!wifiSSID) {
@@ -303,6 +324,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
           wifi_mode: wifiMode,
           wifi_ssid: wifiSSID,
           wifi_password: wifiPassword,
+          wifi_channel: parseInt(wifiChannel),
         })
       })
       .then(response => response.text())
@@ -355,56 +377,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 </html>
 )rawliteral";
 
-// Store MAC to Preferences (EEPROM)
-void saveMacToStorage() {
-  preferences.begin("mac-config", false);
-  preferences.putBytes("mac", config.mac, 6);
-  preferences.end();
-  Serial.println("MAC is saved in storage");
-}
-
-// Load MAC from Preferences
-void loadMacFromStorage(uint8_t mac[6]) {
-  preferences.begin("mac-config", false);
-  size_t len = preferences.getBytes("mac", config.mac, 6);
-  preferences.end();
-
-  if (len != 6) {
-    // Default MAC
-    uint8_t factoryMac[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-    esp_efuse_mac_get_default(factoryMac);
-    memcpy(config.mac, factoryMac, 6);
-    Serial.printf("The factory MAC is: %2x:%2x:%2x:%2x:%2x:%2x",
-                                factoryMac[0], factoryMac[1], factoryMac[2],
-                                factoryMac[3], factoryMac[4], factoryMac[5]);
-    Serial.println();
-  } else {
-    Serial.println("MAC has been loaded from storage");
-  }
-  if (mac) {
-    memcpy(mac, config.mac, 6);
-  }
-}
-
-// Store WIFI to Preferences (EEPROM)
-void saveWifiToStorage() {
-  preferences.begin("wifi-config", false);
-  preferences.putString("wifi-ssid", config.wifi_ssid);
-  preferences.putString("wifi-password", config.wifi_password);
-  preferences.putString("wifi-mode", config.wifi_mode);
-  preferences.end();
-  Serial.println("WIFI settings are saved in storage");
-}
-
-// Load MAC from Preferences
-void loadWifiFromStorage() {
-  preferences.begin("wifi-config", false);
-  config.wifi_mode = preferences.getString("wifi-mode", "ap");
-  config.wifi_ssid = preferences.getString("wifi-ssid", "mavlink");
-  config.wifi_password = preferences.getString("wifi-password", "12345678");
-  preferences.end();
-}
-
 // MAC string parsing
 bool parseMacAddress(const char* macStr, uint8_t* mac) {
   if (strlen(macStr) != 17) return false;
@@ -431,14 +403,6 @@ bool parseMacAddress(const char* macStr, uint8_t* mac) {
   return true;
 }
 
-// MAC to string conversion
-String macToString(uint8_t* mac) {
-  char macStr[18];
-  sprintf(macStr, "%02X:%02X:%02X:%02X:%02X:%02X",
-          mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-  return String(macStr);
-}
-
 // Main page load handler
 void handleRoot() {
   server.send(200, "text/html", htmlPage);
@@ -446,16 +410,17 @@ void handleRoot() {
 
 // Handler to obtain the current MAC
 void handleCurrentMac() {
-  String currentMac = macToString(config.mac);
+  String currentMac = macToString(config.customMAC);
   server.send(200, "text/plain", currentMac);
 }
 
 // Handler to obtain the current WIFI
 void handleCurrentWifi() {
-  StaticJsonDocument<100> doc;
-  doc["wifi_ssid"] = config.wifi_ssid;
-  doc["password"] = config.wifi_password;
-  doc["wifi_mode"] = config.wifi_mode;
+  JsonDocument doc;
+  doc["wifi_ssid"] = config.wifiSSID;
+  doc["wifi_password"] = config.wifiPassword;
+  doc["wifi_mode"] = config.wifiMode == AP_WIFI_MODE ? "ap" : "sta";
+  doc["wifi_channel"] = config.wifiChannel;
   String response;
   serializeJson(doc, response);
   server.send(200, "application/json", response);
@@ -467,13 +432,10 @@ void safeReboot() {
     // 1. close all connections
     server.stop();
 
-    // 2. Save data
-    preferences.end();
-
-    // 3. Wait
+    // 2. Wait
     delay(500);
 
-    // 4. Reboot
+    // 3. Reboot
     ESP.restart();
 }
 
@@ -481,8 +443,9 @@ void safeReboot() {
 void handleSaveMac() {
   if (server.hasArg("mac")) {
     String macStr = server.arg("mac");
+    Serial.printf(macStr.c_str());
 
-    if (parseMacAddress(macStr.c_str(), config.mac)) {
+    if (parseMacAddress(macStr.c_str(), config.customMAC)) {
       saveMacToStorage();
 
       server.send(200, "text/plain", "OK");
@@ -497,23 +460,60 @@ void handleSaveMac() {
 }
 
 // Handler for storing WIFI
+#include <ArduinoJson.h>
+
 void handleSaveWifi() {
-  if (server.hasArg("wifi_ssid")) {
-    config.wifi_ssid = server.arg("wifi_ssid");
+  String body = server.arg("plain"); // Получаем сырое тело запроса
+
+  Serial.println("Received body: " + body);
+
+  // Parse JSON
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, body);
+
+  if (error) {
+    Serial.print("JSON parse failed: ");
+    Serial.println(error.c_str());
+    server.send(400, "text/plain", "Invalid JSON");
+    return;
   }
 
-  if (server.hasArg("wifi_password")) {
-    config.wifi_password = server.arg("wifi_password");
+  // Get values
+  if (doc["wifi_ssid"].is<String>()) {
+    const char* ssid = doc["wifi_ssid"];
+    Serial.printf("SSID: %s\n", ssid);
+    strcpy(config.wifiSSID, ssid);
   }
 
-  if (server.hasArg("wifi_mode")) {
-    config.wifi_mode = server.arg("wifi_mode");
+  if (doc["wifi_password"].is<String>()) {
+    const char* password = doc["wifi_password"];
+    Serial.printf("Password: %s\n", password);
+    strcpy(config.wifiPassword, password);
+  }
+
+  if (doc["wifi_mode"].is<String>()) {
+    const char* modeParam = doc["wifi_mode"];
+    Serial.printf("Mode: %s\n", modeParam);
+
+    if (strcmp(modeParam, "ap") == 0 || strcmp(modeParam, "0") == 0) {
+      config.wifiMode = AP_WIFI_MODE;
+    } else if (strcmp(modeParam, "sta") == 0 || strcmp(modeParam, "1") == 0) {
+      config.wifiMode = STA_WIFI_MODE;
+    } else {
+      config.wifiMode = AP_WIFI_MODE; // default
+    }
+  }
+
+  if (doc["wifi_channel"].is<int>()) {
+    config.wifiChannel = doc["wifi_channel"];
+    Serial.printf("Channel: %d\n", config.wifiChannel);
   }
 
   saveWifiToStorage();
 
   server.send(200, "text/plain", "OK");
   Serial.println("New WIFI settings are saved");
+  safeReboot();
 }
 
 // Handler for resetting to factory MAC
@@ -522,9 +522,9 @@ void handleReset() {
   uint8_t factoryMac[6];
   esp_efuse_mac_get_default(factoryMac);
 
-  memcpy(config.mac, factoryMac, 6);
+  memcpy(config.customMAC, factoryMac, 6);
   saveMacToStorage();
-  //esp_base_mac_addr_set(config.mac);
+  //esp_base_mac_addr_set(config.customMAC);
 
   server.send(200, "text/plain", "MAC reset to factory settings completed");
   safeReboot();
@@ -534,7 +534,7 @@ void handleReset() {
 void handleInfo() {
   String info = "<html><body>";
   info += "<h2>Device information</h2>";
-  info += "<p><strong>Current MAC:</strong> " + macToString(config.mac) + "</p>";
+  info += "<p><strong>Current MAC:</strong> " + macToString(config.customMAC) + "</p>";
 
   uint8_t factoryMac[6];
   esp_efuse_mac_get_default(factoryMac);
@@ -551,7 +551,7 @@ void handleInfo() {
 void webSwerverSetup() {
   Serial.println("------------------------------------------------");
   // Loading saved MAC
-  loadMacFromStorage(NULL);
+  loadMacFromStorage();
   // Loading saved WIFI
   loadWifiFromStorage();
 
@@ -567,10 +567,6 @@ void webSwerverSetup() {
   server.begin();
   Serial.println("------------------------------------------------");
   Serial.println("HTTP server is running");
-  Serial.print("Current MAC: ");
-  Serial.println(macToString(config.mac));
-  Serial.println("To change MAC address: Open the browser and go to the address: http://192.168.4.1");
-
 }
 
 void webServerRun() {

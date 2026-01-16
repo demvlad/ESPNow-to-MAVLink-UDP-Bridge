@@ -15,9 +15,10 @@
 #include "crsf.h"
 #include "mavlink.h"
 #include "config.h"
+//#define DEBUG_TO_LOG
 
 #ifndef LED_BUILTIN
-  #define LED_BUILTIN 2  // GPIO2 для большинства ESP32
+  #define LED_BUILTIN 2  // GPIO2 for ESP32
 #endif
 
 // Config
@@ -26,14 +27,11 @@
 #define TELEMETRY_TIMEOUT_MS 3000
 #define UDP_DATA_SEND_INTERVAL_MS   100
 
-
+#define ESPNOW_CHANNEL 1
 
 // UDP setup
 WiFiUDP udp;
-IPAddress broadcastIP(255, 255, 255, 255);
 
-// MAC address ELRS Backpack. Look it at Backpack web page.
-uint8_t UID[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 // ESPNow data
 typedef struct {
     uint8_t data[300];
@@ -49,24 +47,142 @@ QueueHandle_t packetQueue = NULL;
 
 void IRAM_ATTR OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len);
 void processingTask(void* parameter);
+void saveWifiToStorage();
 
-void setup() {
-    Serial.begin(115200);
-    delay(1000);
+bool startAP() {
+    Serial.println("Creating Access Point...");
 
-    Serial.println("=== ELRS CRSF Telemetry Parser ===");
+    bool success = WiFi.softAP(apSSID, apPassword);
 
-    // MAC address setup
-    UID[0] &= ~0x01;
-    WiFi.mode(WIFI_AP);
-    loadMacFromStorage(UID);
-    loadWifiFromStorage();
-    if (esp_wifi_set_mac(WIFI_IF_STA, UID) != ESP_OK) {
-        Serial.println("Failed to set MAC address!");
+    if (success) {
+        Serial.println("✓ Access Point created");
+        Serial.printf("  SSID: %s\n", config.wifiSSID);
+        Serial.printf("  Password: %s\n", strlen(config.wifiPassword) > 0 ? config.wifiPassword : "(open)");
+        Serial.printf("  Channel: %d\n", config.wifiChannel);
+        Serial.printf("  IP: %s\n", WiFi.softAPIP().toString().c_str());
+        Serial.printf("  MAC: %s\n", WiFi.softAPmacAddress().c_str());
+        return true;
     }
 
-    // ESP-NOW init
+    Serial.println("✗ Failed to create Access Point");
+    return false;
+}
+
+bool connectToWiFi() {
+    Serial.println("Connecting as Client...");
+
+    WiFi.softAP("ESP32_AP", NULL, ESPNOW_CHANNEL, false, 1);
+
+    // Connect to AP
+    WiFi.begin(config.wifiSSID, config.wifiPassword);
+
+
+    Serial.printf("Connecting to: %s %s (ch%d)...", config.wifiSSID, config.wifiPassword, config.wifiChannel);
+
+    int attempts = 0;
+    while (WiFi.status() != WL_CONNECTED && attempts < 30) {
+        delay(500);
+        Serial.print(".");
+        attempts++;
+    }
+
+    if (WiFi.status() == WL_CONNECTED) {
+        delay(1000);
+        esp_wifi_set_channel(ESPNOW_CHANNEL, WIFI_SECOND_CHAN_NONE);
+
+        Serial.println("\n✓ Connected to WiFi");
+        Serial.printf("  IP: %s\n", WiFi.localIP().toString().c_str());
+        Serial.printf("  Gateway: %s\n", WiFi.gatewayIP().toString().c_str());
+        Serial.printf("  RSSI: %d dBm\n", WiFi.RSSI());
+        Serial.printf("  Channel: %d\n", WiFi.channel());
+        Serial.printf("  MAC: %s\n", WiFi.macAddress().c_str());
+        return true;
+    } else {
+        Serial.println("\n✗ Failed to connect");
+
+        // Turn on AP mode
+        Serial.println("Switching to AP mode automatically...");
+        return startAP();
+    }
+}
+
+bool setupCustomMAC() {
+    // Set custom MAC for AP
+    wifi_interface_t interface = WIFI_IF_AP;
+    uint8_t macToSet[6];
+    memcpy(macToSet, config.customMAC, 6);
+    macToSet[0] &= ~0x01;
+
+    if (esp_wifi_set_mac(interface, macToSet) != ESP_OK) {
+        Serial.println("Failed to set MAC");
+        return false;
+    }
+
+    // The actual MAC checking
+    uint8_t actualMAC[6];
+    esp_wifi_get_mac(interface, actualMAC);
+
+    Serial.print("Setup MAC: ");
+    Serial.println(macToString(config.customMAC));
+    Serial.print("Actual MAC: ");
+    Serial.println(macToString(actualMAC));
+    Serial.println("\n");
+    return true;
+}
+
+bool startWiFi() {
+    Serial.println("\n=== Starting WiFi ===");
+
+    // 1. Turn off all
+    WiFi.disconnect(true);
+    delay(100);
+
+    // 2. Set WIFI mode
+    if (config.wifiMode == AP_WIFI_MODE) {
+        WiFi.mode(WIFI_AP);
+        Serial.println("Set WiFi mode: WIFI_AP");
+    } else {
+        WiFi.mode(WIFI_AP_STA);
+        Serial.println("Set WiFi mode: WIFI_STA");
+    }
+    delay(50);
+
+    // Check WiFi initialization
+    if (esp_wifi_start() != ESP_OK) {
+        Serial.println("Warning: WiFi driver not started, trying to start...");
+    }
+
+    // 3. Set custom MAC address
+    if (!setupCustomMAC()) {
+        return false;
+    }
+    delay(50);
+
+    // 4. Run WiFi
+    if (config.wifiMode == AP_WIFI_MODE) {
+        if (!startAP()) {
+            return false;
+        }
+    } else {
+        if (!connectToWiFi()) {
+            return false;
+        }
+    }
+
+    // 6. Switch of power managment for good ESP-NOW work
+    esp_wifi_set_ps(WIFI_PS_NONE);
+
+    Serial.print("WIFI MAC Address: ");
+    Serial.println(WiFi.macAddress());
+
+    Serial.println("To change configuration: Open the browser and go to the address: http://192.168.4.1");
+
+    return true;
+}
+
+void setupESPNow() {
     if (esp_now_init() == ESP_OK) {
+
         esp_now_register_recv_cb(OnDataRecv);
         Serial.println("ESP-NOW: Ready");
 
@@ -74,7 +190,8 @@ void setup() {
         uint8_t broadcastMac[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
         esp_now_peer_info_t peerInfo = {};
         memcpy(peerInfo.peer_addr, broadcastMac, 6);
-        peerInfo.channel = 0;
+        peerInfo.channel = ESPNOW_CHANNEL;
+        peerInfo.ifidx = WIFI_IF_AP;
         peerInfo.encrypt = false;
 
         if (esp_now_add_peer(&peerInfo) == ESP_OK) {
@@ -86,20 +203,9 @@ void setup() {
         delay(3000);
         ESP.restart();
     }
+}
 
-    Serial.print("My MAC Address: ");
-    Serial.println(WiFi.macAddress());
-
-    // The actual MAC checking
-    uint8_t actualMAC[6];
-    esp_wifi_get_mac(WIFI_IF_STA, actualMAC);
-    Serial.print("Actual MAC: ");
-    for(int i = 0; i < 6; i++) {
-        Serial.printf("%02X", actualMAC[i]);
-        if(i < 5) Serial.print(":");
-    }
-    Serial.println("\n");
-
+void createTask() {
     // Make quee for FreeRTOS task
     packetQueue = xQueueCreate(QUEUE_SIZE, sizeof(ESPNowPacket));
     if (packetQueue == NULL) {
@@ -122,50 +228,26 @@ void setup() {
         Serial.println("ERROR: Failed to create processing task!");
         ESP.restart();
     }
+}
 
-    if (!strcmp(config.wifi_mode, "ap")) {
-      // Create WIFI access point
-      bool apStarted = WiFi.softAP(config.wifi_ssid, config.wifi_password);
+void setup() {
+    Serial.begin(115200);
+    delay(1000);
 
-      if (apStarted) {
-          Serial.println("WIFI access point is creatred successfull!");
-          Serial.print("SSID: ");
-          Serial.println(config.wifi_ssid);
-          Serial.print("Password: ");
-          Serial.println(config.wifi_password);
-          // Get AP address
-          IPAddress apIP = WiFi.softAPIP();
-          Serial.print("IP address AP: ");
-          Serial.println(apIP);
-          Serial.println("-------------------------------------------------");
+    Serial.println("=== ELRS CRSF Telemetry Parser ===");
 
-          // Show network info
-          Serial.println("Connect to this WIFI access point from other gadget");
-          Serial.println("Turn on ELRS transmitter with backpacks ESPNow");
-          Serial.println("Receive MAVLink packets on 14550 UDP port");
-      } else {
-          Serial.println("WIFI AP creating error");
-          while(1) delay(1000);
-      }
-    } else {
-      WiFi.begin(config.wifi_ssid, config.wifi_password);
+    // MAC address setup
+    loadMacFromStorage();
+    loadWifiFromStorage();
+    config.customMAC[0] &= ~0x01;
 
-      int attempts = 0;
-      while (WiFi.status() != WL_CONNECTED && attempts < 20) {
-          delay(500);
-          Serial.print(".");
-          attempts++;
-      }
+    startWiFi();
 
-      // Проверяем результат
-      if (WiFi.status() == WL_CONNECTED) {
-          Serial.println("\nConnected successfully!");
-          Serial.print("IP address: ");
-          Serial.println(WiFi.localIP());
-      } else {
-          Serial.println("\nFailed to connect!");
-      }
-    }
+    // ESP-NOW init
+    delay(500);
+    setupESPNow();
+
+    createTask();
 
     webSwerverSetup();
 
@@ -231,6 +313,7 @@ void processingTask(void* parameter) {
             if (millis() >= sendDataTime) {
                 uint8_t* ptrMavlinkData;
                 uint16_t dataLength;
+                IPAddress broadcastIP(255, 255, 255, 255);
                 // Build MAVLink stream
                 if (buildMAVLinkDataStream(&telemetriesData, &ptrMavlinkData, &dataLength)) {
                     // Send MAVLink stream to UDP
@@ -270,9 +353,9 @@ void printTelemetry(const TelemetryData_t* td) {
 
 
     // Режим полета
-    if (strlen(td->flightMode.mode) > 0) {
-        Serial.printf("📊 Mode: %s\n", td->flightMode);
-    }
+    //if (strlen(td->flightMode.mode) > 0) {
+    //    Serial.printf("📊 Mode: %s\n", td->flightMode);
+    //}
 
     // Статистика пакетов (опционально)
     Serial.print("📊 Packets: ");
@@ -333,7 +416,7 @@ void loop() {
 
     // Show full telemetries data
     if (millis() - lastTelemetryPrint >= 5000) {
-        if (telemetriesData.statistick.packetCount > 0 && millis() - telemetriesData.lastUpdate < 2000) {
+        if (telemetriesData.statistic.packetCount > 0 && millis() - telemetriesData.lastUpdate < 2000) {
             printTelemetry(&telemetriesData);
         }
         lastTelemetryPrint = millis();
