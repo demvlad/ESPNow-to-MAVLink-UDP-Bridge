@@ -172,7 +172,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
     <div class="input-group">
       <div class="input-row">
         <label for="wifi_mode">WiFi Mode</label>
-        <select class="wifi-input" id="wifi_mode" onchange="wifiModeChange(this)">
+        <select class="wifi-input" id="wifi_mode" onchange="wifiModeChange(this.value)">
           <option value="ap">WiFi Access Point</option>
           <option value="sta">WiFi Client (Connect to network)</option>
         </select>
@@ -206,12 +206,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
     let externalSSID = "";
     let externalPassword = "";
     let apChannel = "1";
-    function wifiModeChange(select) {
+    function wifiModeChange(wifi_mode) {
       const ssid_elem = document.getElementById('wifi_ssid');
       const password_elem = document.getElementById('wifi_password');
       const channel_elem = document.getElementById('wifi_channel');
 
-      if (select.value === "ap") {
+      if (wifi_mode === "ap") {
         externalSSID = ssid_elem.value;
         ssid_elem.value = "mavlink";
         ssid_elem.readOnly = true;
@@ -271,15 +271,42 @@ const char htmlPage[] PROGMEM = R"rawliteral(
           return response.json();
         })
         .then(data => {
-          document.getElementById('wifi_ssid').value = data.wifi_ssid;
-          document.getElementById('wifi_password').value = data.wifi_password;
-          document.getElementById('wifi_mode').value = data.wifi_mode;
-          document.getElementById('wifi_channel').value = data.wifi_channel;
+          const ssid_elem = document.getElementById('wifi_ssid');
+          const password_elem = document.getElementById('wifi_password');
+          const channel_elem = document.getElementById('wifi_channel');
+          const wifi_mode_elem = document.getElementById('wifi_mode');
+
+          wifi_mode_elem.value = data.wifi_mode;
+
           if (data.wifi_mode === "sta") {
             externalSSID = data.wifi_ssid;
             externalPassword = data.wifi_password;
+
+            ssid_elem.value = data.wifi_ssid;
+            ssid_elem.readOnly = false;
+            ssid_elem.style.cursor = 'text';
+
+            password_elem.value = data.wifi_password;
+            password_elem.readOnly = false;
+            password_elem.style.cursor = 'text';
+
+            channel_elem.value = "1";
+            channel_elem.readOnly = true;
+            channel_elem.style.cursor = 'not-allowed';
           } else {
               apChannel = data.wifi_channel;
+
+              ssid_elem.value = "mavlink";
+              ssid_elem.readOnly = true;
+              ssid_elem.style.cursor = 'not-allowed';
+
+              password_elem.value = "12345678";
+              password_elem.readOnly = true;
+              password_elem.style.cursor = 'not-allowed';
+
+              channel_elem.value = apChannel;
+              channel_elem.readOnly = false;
+              channel_elem.style.cursor = 'text';
           }
         })
         .catch(error => {

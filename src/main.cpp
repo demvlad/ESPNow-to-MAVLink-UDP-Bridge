@@ -56,11 +56,12 @@ bool startAP() {
 
     if (success) {
         Serial.println("✓ Access Point created");
-        Serial.printf("  SSID: %s\n", config.wifiSSID);
-        Serial.printf("  Password: %s\n", strlen(config.wifiPassword) > 0 ? config.wifiPassword : "(open)");
+        Serial.printf("  SSID: %s\n", apSSID);
+        Serial.printf("  Password: %s\n", apPassword);
         Serial.printf("  Channel: %d\n", config.wifiChannel);
         Serial.printf("  IP: %s\n", WiFi.softAPIP().toString().c_str());
         Serial.printf("  MAC: %s\n", WiFi.softAPmacAddress().c_str());
+        Serial.println("To change configuration: Open the browser and go to the address: http://192.168.4.1");
         return true;
     }
 
@@ -92,10 +93,15 @@ bool connectToWiFi() {
 
         Serial.println("\n✓ Connected to WiFi");
         Serial.printf("  IP: %s\n", WiFi.localIP().toString().c_str());
-        Serial.printf("  Gateway: %s\n", WiFi.gatewayIP().toString().c_str());
+        String gatewayIP = WiFi.gatewayIP().toString();
+        Serial.printf("  Gateway: %s\n", gatewayIP.c_str());
         Serial.printf("  RSSI: %d dBm\n", WiFi.RSSI());
         Serial.printf("  Channel: %d\n", WiFi.channel());
         Serial.printf("  MAC: %s\n", WiFi.macAddress().c_str());
+        Serial.println("To change configuration:");
+        Serial.println("Open the browser and go to the local network address: http://%s", gatewayIP.c_str());
+        Serial.println("Or connect to mavlink access point with password 12345678, open the browser and go to the address: http://192.168.4.1");
+
         return true;
     } else {
         Serial.println("\n✗ Failed to connect");
@@ -174,8 +180,6 @@ bool startWiFi() {
 
     Serial.print("WIFI MAC Address: ");
     Serial.println(WiFi.macAddress());
-
-    Serial.println("To change configuration: Open the browser and go to the address: http://192.168.4.1");
 
     return true;
 }
