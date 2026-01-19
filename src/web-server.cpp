@@ -18,12 +18,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
       margin: 50px auto;
       padding: 20px;
       background-color: #f5f5f5;
+      height: auto;
     }
     .container {
       background: white;
       padding: 20px;
       border-radius: 10px;
       box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      height: auto;
+      min-height: auto;
     }
     h2 {
       color: #333;
@@ -143,61 +146,129 @@ const char htmlPage[] PROGMEM = R"rawliteral(
       box-sizing: border-box !important;
     }
 
+    .tabs-container {
+      width: 100%;
+      background: white;
+      overflow: hidden;
+    }
+
+    .tabs-header {
+      display: flex;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-bottom: 1px solid #ddd;
+    }
+
+    .tab-content {
+      display: none;
+      animation: fadeIn 0.5s ease-in-out;
+      height: auto;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 15px 10px;
+      background: none;
+      border: none;
+      color: white;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+    }
+
+    .tab-btn::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      width: 0;
+      height: 3px;
+      background: #ffeb3b;
+      transition: all 0.3s ease;
+      transform: translateX(-50%);
+    }
+
+    .tab-btn:hover {
+      background: rgba(255,255,255,0.1);
+    }
+
+    .tab-btn.active {
+      background: rgba(255,255,255,0.15);
+    }
+
+    .tab-btn.active::after {
+      width: 80%;
+    }
+
   </style>
 </head>
+
 <body>
   <div class="container">
-    <h2>🔧 ESP32 MAC-Address setup</h2>
+    <div class="tabs-container">
+      <div class="tabs-header">
+        <button class="tab-btn active" data-tab="mac-tab" id="mac-tab-btn">🔧 MAC-Address</button>
+        <button class="tab-btn" data-tab="wifi-tab" id="wifi-tab-btn">📶 WIFI</button>
+      </div>
 
-    <div class="info-box">
-      <strong>Current ESP32 MAC-Address:</strong>
-      <div id="currentMac" class="current-mac">Load...</div>
-    </div>
+      <div id="mac-tab" class="tab-content active">
+        <div class="info-box">
+          <strong>Current ESP32 MAC-Address:</strong>
+          <div id="currentMac" class="current-mac">Load...</div>
+        </div>
 
-    <div class="input-group">
-      <label for="mac">New ESP32 MAC-Address:</label>
-      <input type="text" id="mac" name="mac"
-             placeholder="AA:BB:CC:DD:EE:FF"
-             pattern="^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$"
-             title="Enter the MAC in the format XX:XX:XX:XX:XX:XX">
-      <div class="mac-example">Format: AA:BB:CC:DD:EE:FF or AA-BB-CC-DD-EE-FF</div>
-    </div>
+        <div class="input-group">
+          <label for="mac">New ESP32 MAC-Address:</label>
+          <input type="text" id="mac" name="mac"
+                 placeholder="AA:BB:CC:DD:EE:FF"
+                 pattern="^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$"
+                 title="Enter the MAC in the format XX:XX:XX:XX:XX:XX">
+          <div class="mac-example">Format: AA:BB:CC:DD:EE:FF or AA-BB-CC-DD-EE-FF</div>
+        </div>
 
-    <div class="button-group">
-      <button class="btn-save" onclick="saveMac()">💾 Save MAC</button>
-      <button class="btn-current" onclick="getCurrentMac()">🔄 Current MAC</button>
-    </div>
+        <div class="button-group">
+          <button class="btn-save" onclick="saveMac()">💾 Save MAC</button>
+          <button class="btn-current" onclick="getCurrentMac()">🔄 Current MAC</button>
+        </div>
+      </div>
 
-    <h2>🔧 WIFI setup</h2>
-    <div class="input-group">
-      <div class="input-row">
-        <label for="wifi_mode">WiFi Mode</label>
-        <select class="wifi-input" id="wifi_mode" onchange="wifiModeChange(this.value)">
-          <option value="ap">WiFi Access Point</option>
-          <option value="sta">WiFi Client (Connect to network)</option>
-        </select>
+      <div id="wifi-tab" class="tab-content">
+        <div class="input-group">
+          <div class="input-row">
+            <label for="wifi_mode">WiFi Mode</label>
+            <select class="wifi-input" id="wifi_mode" onchange="wifiModeChange(this.value)">
+              <option value="ap">WiFi Access Point</option>
+              <option value="sta">WiFi Client (Connect to network)</option>
+            </select>
+          </div>
+          <div class="input-row">
+            <label for="wifi_ssid">SSID</label>
+            <input class="wifi-input" type="text" id="wifi_ssid"
+                   title="WIFI SSID">
+          </div>
+          <div class="input-row">
+            <label for="wifi_password">Password</label>
+            <input class="wifi-input" type="text" id="wifi_password"
+                   title="WIFI password">
+          </div>
+          <div class="input-row">
+            <label for="wifi_channel">Channel</label>
+            <input class="wifi-input" type="text" id="wifi_channel"
+                   title="WIFI channel">
+          </div>
+          <div class="button-group">
+            <button class="btn-save" onclick="saveWifi()">💾 Save WIFI</button>
+            <button class="btn-current" onclick="getCurrentWifi()">🔄 Current WIFI</button>
+          </div>
+        </div>
       </div>
-      <div class="input-row">
-        <label for="wifi_ssid">SSID</label>
-        <input class="wifi-input" type="text" id="wifi_ssid"
-               title="WIFI SSID">
-      </div>
-      <div class="input-row">
-        <label for="wifi_password">Password</label>
-        <input class="wifi-input" type="text" id="wifi_password"
-               title="WIFI password">
-      </div>
-      <div class="input-row">
-        <label for="wifi_channel">Channel</label>
-        <input class="wifi-input" type="text" id="wifi_channel"
-               title="WIFI channel">
-      </div>
-      <div class="button-group">
-        <button class="btn-save" onclick="saveWifi()">💾 Save WIFI</button>
-        <button class="btn-current" onclick="getCurrentWifi()">🔄 Current WIFI</button>
-      </div>
+      <div id="status" class="status"></div>
     </div>
-    <div id="status" class="status"></div>
   </div>
 
   <script>
@@ -244,6 +315,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
     // Get current MAC by page loading
     window.onload = function() {
+      prepareTabs();
       getCurrentMac();
       getCurrentWifi();
     };
@@ -366,11 +438,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         return;
       }
 
-      if (!wifiPassword) {
-        showStatus('Enter valid password', 'error');
-        return;
-      }
-
       fetch('/save_wifi', {
         method: 'POST',
         headers: {
@@ -411,6 +478,27 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         statusDiv.style.display = 'none';
       }, 5000);
     }
+
+        function prepareTabs() {
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          switchTab(btn.dataset.tab);
+        });
+      });
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+      });
+
+      document.getElementById(tabId).classList.add('active');
+      document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
+    }
+
 
     // Separators autofill
     document.getElementById('mac').addEventListener('input', function(e) {

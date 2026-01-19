@@ -99,7 +99,7 @@ bool connectToWiFi() {
         Serial.printf("  Channel: %d\n", WiFi.channel());
         Serial.printf("  MAC: %s\n", WiFi.macAddress().c_str());
         Serial.println("To change configuration:");
-        Serial.println("Open the browser and go to the local network address: http://%s", gatewayIP.c_str());
+        Serial.printf("Open the browser and go to the local network address: http://%s\n", gatewayIP.c_str());
         Serial.println("Or connect to mavlink access point with password 12345678, open the browser and go to the address: http://192.168.4.1");
 
         return true;
