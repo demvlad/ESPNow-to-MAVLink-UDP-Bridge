@@ -17,11 +17,13 @@ Set ESP32 MAC address at setup page like yours ELRS TX UUID, what you can look a
 
 Go to the WiFi setup tab.
 Select WiFi mode and set login and password.
+
 **WiFi settings for AP mode**
 
 ![wifi_ap_setup](https://github.com/user-attachments/assets/fe252ba4-fc74-469e-b228-fbf976e508c5)
 
 **WiFi settings for STA mode**
+
 ![wifi_sta_setup](https://github.com/user-attachments/assets/3be1a237-3b43-41b4-a792-ec812def4189)
 
 
@@ -32,6 +34,7 @@ Turn on ELRS transmitter with backpacs ESPNow telemetry enabled.
 Turn on drone with CRSF telemetry enabled.
 
 Connect to 'mavlink' WIFI access point, what is created ESP32 device for Access point mode. The password is 12345678.
-In STA mode device connects to external WiFi point by use login and password configuration.
+
+In STA mode device connects to external WiFi point by using login and password configuration. In this mode It is possible to use the WiFi channel 1 only.
 
 Receive MAVLink telemetry packets on 14550 UDP port by using MissionPlanner or other GCS program.
