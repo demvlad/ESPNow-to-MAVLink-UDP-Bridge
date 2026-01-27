@@ -31,6 +31,7 @@ Turn on ELRS transmitter with backpacs ESPNow telemetry enabled.
 
 Turn on drone with CRSF telemetry enabled.
 
-Connect to 'mavlink' WIFI access point, what is created ESP32 device. The password is 12345678.
+Connect to 'mavlink' WIFI access point, what is created ESP32 device for Access point mode. The password is 12345678.
+In STA mode device connects to external WiFi point by use login and password configuration.
 
 Receive MAVLink telemetry packets on 14550 UDP port by using MissionPlanner or other GCS program.
