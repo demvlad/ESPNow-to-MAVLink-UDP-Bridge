@@ -17,9 +17,11 @@ Set ESP32 MAC address at setup page like yours ELRS TX UUID, what you can look a
 
 Go to the WiFi setup tab.
 Select WiFi mode and set login and password.
+**WiFi settings for AP mode**
 
 ![wifi_ap_setup](https://github.com/user-attachments/assets/fe252ba4-fc74-469e-b228-fbf976e508c5)
 
+**WiFi settings for STA mode**
 ![wifi_sta_setup](https://github.com/user-attachments/assets/3be1a237-3b43-41b4-a792-ec812def4189)
 
 
