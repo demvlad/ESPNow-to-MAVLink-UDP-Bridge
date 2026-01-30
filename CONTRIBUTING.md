@@ -34,25 +34,27 @@ If you need help with pull requests, GitHub has excellent guides:
 7. **Commit Your Changes**
 
    git add .
+   
    git commit -m "type(scope): brief description"
 
-8. **Push to Your Fork**
+9. **Push to Your Fork**
 
    git push origin feature/your-feature-name
 
-9. **Create Pull Request**
+10. **Create Pull Request**
 
-   Go to your fork on GitHub
+   - Go to your fork on GitHub
 
-   Click "Compare & pull request"
+   - Click "Compare & pull request"
 
-   Ensure proper branch selection:
+   - Ensure proper branch selection:
 
-   base: demvlad/ESPNow-to-MAVLink-UDP-Bridge:main
-
-   head: your-username:feature/your-feature-name
+      - base: demvlad/ESPNow-to-MAVLink-UDP-Bridge:main
+   
+      - head: your-username:feature/your-feature-name
     
-   Complete the PR template and submit
+   - Complete the PR template and submit
+
 
 **For Subsequent Contributions**
 
