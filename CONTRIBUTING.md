@@ -1,30 +1,61 @@
-*Using Git and Github*
+## Using Git and GitHub
 
-If you need help with pull requests there are guides on github here:
+If you need help with pull requests, GitHub has excellent guides:
+- [Creating a pull request](https://help.github.com/articles/creating-a-pull-request/)
+- [GitHub Flow](https://guides.github.com/introduction/flow/)
 
-https://help.github.com/articles/creating-a-pull-request/
+### Step-by-Step Contribution Process
 
-The main flow for a contributing is as follows:
+1. **Fork the Repository**
+   - Login to GitHub
+   - Go to [ESPNow-to-MAVLink-UDP-Bridge](https://github.com/demvlad/ESPNow-to-MAVLink-UDP-Bridge)
+   - Click **"Fork"** (top-right corner)
 
-1. Login to github, go to the ESPNow-to-MAVLink-UDP-Bridge repository and press fork;
+2. **Clone Your Fork**
 
-2. Then using the command line/terminal on your computer: git clone url to YOUR fork
+   git clone https://github.com/YOUR-USERNAME/ESPNow-to-MAVLink-UDP-Bridge.git
+   
+   cd ESPNow-to-MAVLink-UDP-Bridge
 
-3. cd ESPNow-to-MAVLink-UDP-Bridge
+3. **Set Upstream Remote**
 
-4. git checkout master
+   git remote add upstream https://github.com/demvlad/ESPNow-to-MAVLink-UDP-Bridge.git
 
-5. git checkout -b my-new-code
+4. **Create a Feature Branch**
 
-6. Make changes;
+   git checkout main
+   
+   git pull origin main
+   
+   git checkout -b feature/your-feature-name
 
-7. git add files that have changed
+5. **Make and Test Changes**
+   
+7. **Commit Your Changes**
 
-8. git commit
+   git add .
+   git commit -m "type(scope): brief description"
 
-9. git push origin my-new-code
+8. **Push to Your Fork**
 
-10. Create pull request using github UI to merge your changes from your new branch into ESPNow-to-MAVLink-UDP-Bridge/master
+   git push origin feature/your-feature-name
+
+9. **Create Pull Request**
+
+   Go to your fork on GitHub
+
+   Click "Compare & pull request"
+
+   Ensure proper branch selection:
+
+   base: demvlad/ESPNow-to-MAVLink-UDP-Bridge:main
+
+   head: your-username:feature/your-feature-name
+    
+   Complete the PR template and submit
+
+**For Subsequent Contributions**
+
+Repeat from step 4 for each new change. Always create a fresh branch.
 
 
-Repeat from step 4 for new other changes.
