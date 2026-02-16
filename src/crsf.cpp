@@ -4,6 +4,7 @@
 // CRSF Frame Types
 typedef enum {
     CRSF_FRAMETYPE_GPS = 0x02,
+    CRSF_FRAMETYPE_GPS_EXTENDED = 0x06;
     CRSF_FRAMETYPE_VARIO = 0x07,
     CRSF_FRAMETYPE_BATTERY_SENSOR = 0x08,
     CRSF_FRAMETYPE_BARO_ALTITUDE = 0x09,
@@ -49,6 +50,21 @@ typedef struct {
     uint16_t altitude;      // meters (meters + 1000)
     uint8_t satellites;
 } crsfGps_t;
+
+typedef struct {
+    uint8_t fix_type;       // Current GPS fix quality
+    int16_t n_speed;        // Northward (north = positive) Speed [cm/sec]
+    int16_t e_speed;        // Eastward (east = positive) Speed [cm/sec]
+    int16_t v_speed;        // Vertical (up = positive) Speed [cm/sec]
+    int16_t h_speed_acc;    // Horizontal Speed accuracy cm/sec
+    int16_t track_acc;      // Heading accuracy in degrees scaled with 1e-1 degrees times 10)
+    int16_t alt_ellipsoid;  // Meters Height above GPS Ellipsoid (not MSL)
+    int16_t h_acc;          // horizontal accuracy in cm
+    int16_t v_acc;          // vertical accuracy in cm
+    uint8_t reserved;
+    uint8_t hDOP;           // Horizontal dilution of precision,Dimensionless in nits of.1.
+    uint8_t vDOP;           // vertical dilution of precision, Dimensionless in nits of .1.
+} crsfGpsExt_t;
 
 typedef struct {
     uint8_t uplinkRSSI1;          // RSSI of uplink (signal strength)
@@ -124,19 +140,36 @@ bool parseCRSFPacket(const uint8_t *data, int len, TelemetryData_t* telemetry) {
     switch (frame_type) {
 
         case CRSF_FRAMETYPE_GPS: // GPS
-            if (payload_len >= 15) {
+            if (payload_len >= sizeof(crsfGps_t)) {
                 telemetry->gps.enabled = true;
                 telemetry->gps.latitude = bigEndian32(payload) / 10000000.0; // [degree]
                 telemetry->gps.longitude = bigEndian32(payload + 4) / 10000000.0; // [degree]
-                telemetry->gps.groundSpeed = bigEndian16(payload + 8) / 10.0f; // [m/s]
+                telemetry->gps.groundSpeed = bigEndian16(payload + 8) / 10.0f / 3.6; // [m/s]
                 telemetry->gps.heading = bigEndian16(payload + 10) * 0.01f; // [degree]
                 telemetry->gps.altitude = bigEndian16(payload + 12) - 1000.0f; // [m] The BF CRFS telemetry add  +1000
                 telemetry->gps.satellites = payload[14];
             }
             break;
 
+        case CRSF_FRAMETYPE_GPS_EXTENDED: // GPS ext
+            if (payload_len >= sizeof(crsfGpsExt_t)) {
+                telemetry->gps_ext.enabled = true;
+                telemetry->gps_ext.fix_type = payload[0];
+                telemetry->gps_ext.n_speed = bigEndian16(payload + 1) / 100.0f;     // [m/s]
+                telemetry->gps_ext.e_speed = bigEndian16(payload + 3) / 100.0f;     // [m/s]
+                telemetry->gps_ext.up_speed = bigEndian16(payload + 5) / 100.0f;     // [m/s]
+                telemetry->gps_ext.h_speed_acc = bigEndian16(payload + 7) / 100.0f;  // [m/s]
+                telemetry->gps_ext.track_acc = bigEndian16(payload + 9) / 10.0f;     // [deg]
+                telemetry->gps_ext.alt_ellipsoid = (float)bigEndian16(payload + 11);     // [m]
+                telemetry->gps_ext.h_acc = bigEndian16(payload + 13) / 10.0f;     // [m]
+                telemetry->gps_ext.v_acc = bigEndian16(payload + 15) / 10.0f;     // [m]
+                telemetry->gps_ext.hDOP = payload[18] / 10.0f;     // units
+                telemetry->gps_ext.vDOP = payload[19] / 10.0f;     // units
+            }
+            break;
+
         case CRSF_FRAMETYPE_BATTERY_SENSOR: // Battery
-            if (payload_len >= 8) {
+            if (payload_len >= sizeof(crsfBatterySensor_t)) {
                 telemetry->battery.enabled = true;
                 telemetry->battery.voltage = bigEndian16(payload) * 0.1f;
                 telemetry->battery.current = bigEndian16(payload + 2) * 0.1f;
@@ -146,7 +179,7 @@ bool parseCRSFPacket(const uint8_t *data, int len, TelemetryData_t* telemetry) {
             break;
 
         case CRSF_FRAMETYPE_ATTITUDE: // Attitude
-            if (payload_len >= 6) {
+            if (payload_len >= sizeof(crsfAttitude_t)) {
                 telemetry->attitude.enabled = true;
                 telemetry->attitude.pitch = bigEndian16(payload) / 10000.0f; // rad*10000 → rad
                 telemetry->attitude.roll = bigEndian16(payload + 2) / 10000.0f; // rad*10000 → rad
