@@ -33,64 +33,68 @@ bool buildMAVLinkDataStream(TelemetryData_t* telemetry, uint8_t** ptrMavlinkData
         return false;
     }
 
-    if (telemetry->gps.enabled) {
-        mavlink_msg_gps_raw_int_pack(MAVLINK_SYSTEM_ID, MAVLINK_COMPONENT_ID, &mavMsg,
-            // time_usec Timestamp (microseconds since UNIX epoch or microseconds since system boot)
-            micros(),
-            // fix_type 0-1: no fix, 2: 2D fix, 3: 3D fix. Some applications will not use the value of this field unless it is at least two, so always correctly fill in the fix.
-            telemetry->gps.satellites > 5 ? 3 : 0,
-            // lat Latitude in 1E7 degrees
-            telemetry->gps.latitude * 1e7,
-            // lon Longitude in 1E7 degrees
-            telemetry->gps.longitude * 1e7,
-            // alt Altitude in 1E3 meters (millimeters) above MSL
-            telemetry->gps.altitude * 1000.0f,
-            // eph GPS HDOP horizontal dilution of position (unitless * 100). If unknown, set to: UINT16_MAX
-            UINT16_MAX,
-            // epv GPS VDOP vertical dilution of position (unitless * 100). If unknown, set to: UINT16_MAX
-            UINT16_MAX,
-            // vel GPS ground speed (m/s * 100). If unknown, set to: UINT16_MAX
-            telemetry->gps.groundSpeed * 100.0f,
-            // cog Course over ground (NOT heading, but direction of movement) in degrees * 100, 0.0..359.99 degrees. If unknown, set to: UINT16_MAX
-            telemetry->gps.heading * 100.0f,
-            // satellites_visible Number of satellites visible. If unknown, set to 255
-            telemetry->gps.satellites,
-            // Altitude [mm] (above WGS84, EGM96 ellipsoid). Positive for up.
-            telemetry->gps.altitude * 1000.0f,
-            // h_acc [mm] Position uncertainty
-            UINT32_MAX,
-            // v_acc [mm] Altitude uncertainty
-            UINT32_MAX,
-            // vel_acc [mm/s] Speed uncertainty
-            UINT32_MAX,
-            // [degE5] Heading / track uncertainty - Unused
-            UINT32_MAX,
-            //Yaw in earth frame from north. Use 0 if this GPS does not provide yaw - Unused
-            0);
-        dataLength += mavlink_msg_to_send_buffer(mavBuffer + dataLength, &mavMsg);
-
-        mavlink_msg_global_position_int_pack(MAVLINK_SYSTEM_ID, MAVLINK_COMPONENT_ID, &mavMsg,
-            // time_usec Timestamp (microseconds since UNIX epoch or microseconds since system boot)
-            micros(),
-            // lat Latitude in 1E7 degrees
-            telemetry->gps.latitude * 1e7,
-            // lon Longitude in 1E7 degrees
-             telemetry->gps.longitude * 1e7,
-            // alt Altitude in 1E3 meters (millimeters) above MSL
-            telemetry->gps.altitude * 1000.0f,
-            // relative_alt Altitude above ground in meters, expressed as * 1000 (millimeters)
-            telemetry->gps.altitude * 1000.0f, // do not have AGL, to use MSL instead of
-            // Ground X Speed (Latitude), expressed as m/s * 100
-            telemetry->gps.groundSpeed * cos(telemetry->gps.heading / 57.3) * 100,
-            // Ground Y Speed (Longitude), expressed as m/s * 100
-            telemetry->gps.groundSpeed * sin(telemetry->gps.heading / 57.3) * 100,
-            // Ground Z Speed (Altitude), expressed as m/s * 100
-            0,  // Do not have Vz
-            // heading Current heading in degrees, in compass units (0..360, 0=north)
-            telemetry->gps.heading
-        );
-        dataLength += mavlink_msg_to_send_buffer(mavBuffer + dataLength, &mavMsg);
+    if (!telemetry->gps.enabled) {
+        return false;
     }
+
+    mavlink_msg_gps_raw_int_pack(MAVLINK_SYSTEM_ID, MAVLINK_COMPONENT_ID, &mavMsg,
+        // time_usec Timestamp (microseconds since UNIX epoch or microseconds since system boot)
+        micros(),
+        // fix_type 0-1: no fix, 2: 2D fix, 3: 3D fix. Some applications will not use the value of this field unless it is at least two, so always correctly fill in the fix.
+        telemetry->gps_ext.enabled ? telemetry->gps_ext.fix_type : telemetry->gps.satellites > 5 ? 3 : 0,
+        // lat Latitude in 1E7 degrees
+        telemetry->gps.latitude * 1e7,
+        // lon Longitude in 1E7 degrees
+        telemetry->gps.longitude * 1e7,
+        // alt Altitude in 1E3 meters (millimeters) above MSL
+        telemetry->gps.altitude * 1000.0f,
+        // eph GPS HDOP horizontal dilution of position (unitless * 100). If unknown, set to: UINT16_MAX
+        telemetry->gps_ext.enabled ? telemetry->gps_ext.hDOP * 100 : UINT16_MAX,
+        // epv GPS VDOP vertical dilution of position (unitless * 100). If unknown, set to: UINT16_MAX
+        telemetry->gps_ext.enabled ? telemetry->gps_ext.vDOP * 100 : UINT16_MAX,
+        // vel GPS ground speed (m/s * 100). If unknown, set to: UINT16_MAX
+        telemetry->gps.groundSpeed * 100.0f,
+        // cog Course over ground (NOT heading, but direction of movement) in degrees * 100, 0.0..359.99 degrees. If unknown, set to: UINT16_MAX
+        telemetry->gps.heading * 100.0f,
+        // satellites_visible Number of satellites visible. If unknown, set to 255
+        telemetry->gps.satellites,
+        // Altitude [mm] (above WGS84, EGM96 ellipsoid). Positive for up.
+        telemetry->gps.altitude * 1000.0f,
+        // h_acc [mm] Position uncertainty
+        telemetry->gps_ext.enabled ? telemetry->gps_ext.h_acc * 1000 : UINT32_MAX,
+        // v_acc [mm] Altitude uncertainty
+        telemetry->gps_ext.enabled ? telemetry->gps_ext.v_acc * 1000 : UINT32_MAX,
+        // vel_acc [mm/s] Speed uncertainty
+        UINT32_MAX,
+        // [degE5] Heading / track uncertainty - Unused
+        UINT32_MAX,
+        //Yaw in earth frame from north. Use 0 if this GPS does not provide yaw - Unused
+        0
+    );
+
+    dataLength += mavlink_msg_to_send_buffer(mavBuffer + dataLength, &mavMsg);
+
+    mavlink_msg_global_position_int_pack(MAVLINK_SYSTEM_ID, MAVLINK_COMPONENT_ID, &mavMsg,
+        // time_usec Timestamp (microseconds since UNIX epoch or microseconds since system boot)
+        micros(),
+        // lat Latitude in 1E7 degrees
+        telemetry->gps.latitude * 1e7,
+        // lon Longitude in 1E7 degrees
+        telemetry->gps.longitude * 1e7,
+        // alt Altitude in 1E3 meters (millimeters) above MSL
+        telemetry->gps.altitude * 1000.0f,
+        // relative_alt Altitude above ground in meters, expressed as * 1000 (millimeters)
+        telemetry->gps.altitude * 1000.0f, // do not have AGL, to use MSL instead of
+        // Ground X Speed (Latitude), expressed as m/s * 100
+        telemetry->gps_ext.enabled ? telemetry->gps_ext.n_speed * 100 : telemetry->gps.groundSpeed * cos(telemetry->gps.heading / 57.3) * 100,
+        // Ground Y Speed (Longitude), expressed as m/s * 100
+        telemetry->gps_ext.enabled ? telemetry->gps_ext.e_speed * 100 : telemetry->gps.groundSpeed * sin(telemetry->gps.heading / 57.3) * 100,
+        // Ground Z Speed (Altitude), expressed as m/s * 100
+        telemetry->gps_ext.enabled ? -telemetry->gps_ext.up_speed * 100 : 0,
+        // heading Current heading in degrees, in compass units (0..360, 0=north)
+        telemetry->gps.heading
+    );
+    dataLength += mavlink_msg_to_send_buffer(mavBuffer + dataLength, &mavMsg);
 
     if (telemetry->attitude.enabled) {
         mavlink_msg_attitude_pack(MAVLINK_SYSTEM_ID, MAVLINK_COMPONENT_ID, &mavMsg,
