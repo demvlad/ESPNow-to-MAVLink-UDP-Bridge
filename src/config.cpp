@@ -63,6 +63,23 @@ void loadWifiFromStorage() {
   preferences.end();
 }
 
+// Store UI language preference
+void saveUiLangToStorage() {
+  preferences.begin("ui_config", false);
+  preferences.putUChar("lang", config.uiLang);
+  preferences.end();
+}
+
+// Load UI language preference
+void loadUiLangFromStorage() {
+  preferences.begin("ui_config", false);
+  config.uiLang = preferences.getUChar("lang", UI_LANG_AUTO);
+  if (config.uiLang > UI_LANG_RU) {
+    config.uiLang = UI_LANG_AUTO;
+  }
+  preferences.end();
+}
+
 // MAC to string conversion
 String macToString(uint8_t* mac) {
   char macStr[18];
