@@ -29,6 +29,16 @@
 
 #define ESPNOW_CHANNEL 1
 
+// ESP32-C3 has a single hardware MAC: the soft-AP MAC is always the station
+// MAC + 1 and cannot be set directly. Use the station interface for ESP-NOW.
+#if defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6)
+  #define USE_STA_FOR_ESPNOW 1
+  #define ESPNOW_IFACE WIFI_IF_STA
+#else
+  #define USE_STA_FOR_ESPNOW 0
+  #define ESPNOW_IFACE WIFI_IF_AP
+#endif
+
 // UDP setup
 WiFiUDP udp;
 
@@ -113,14 +123,15 @@ bool connectToWiFi() {
 }
 
 bool setupCustomMAC() {
-    // Set custom MAC for AP
-    wifi_interface_t interface = WIFI_IF_AP;
+    // Set custom MAC for the ESP-NOW interface
+    wifi_interface_t interface = ESPNOW_IFACE;
     uint8_t macToSet[6];
     memcpy(macToSet, config.customMAC, 6);
     macToSet[0] &= ~0x01;
 
-    if (esp_wifi_set_mac(interface, macToSet) != ESP_OK) {
-        Serial.println("Failed to set MAC");
+    esp_err_t macErr = esp_wifi_set_mac(interface, macToSet);
+    if (macErr != ESP_OK) {
+        Serial.printf("Failed to set MAC: %d (%s)\n", macErr, esp_err_to_name(macErr));
         return false;
     }
 
@@ -145,22 +156,29 @@ bool startWiFi() {
 
     // 2. Set WIFI mode
     if (config.wifiMode == AP_WIFI_MODE) {
+#if !USE_STA_FOR_ESPNOW
         WiFi.mode(WIFI_AP);
         Serial.println("Set WiFi mode: WIFI_AP");
+#else
+        // The station interface must exist for ESP-NOW and for setting the MAC
+        WiFi.mode(WIFI_AP_STA);
+        Serial.println("Set WiFi mode: WIFI_AP (with station interface)");
+#endif
     } else {
         WiFi.mode(WIFI_AP_STA);
         Serial.println("Set WiFi mode: WIFI_STA");
     }
     delay(50);
 
-    // Check WiFi initialization
-    if (esp_wifi_start() != ESP_OK) {
-        Serial.println("Warning: WiFi driver not started, trying to start...");
-    }
-
-    // 3. Set custom MAC address
+    // 3. Set custom MAC address. On ESP32-C3 the MAC can only be changed
+    // while the WiFi driver is stopped, so restart it around the change.
+    esp_wifi_stop();
+    delay(50);
     if (!setupCustomMAC()) {
         return false;
+    }
+    if (esp_wifi_start() != ESP_OK) {
+        Serial.println("Warning: WiFi driver not started, trying to start...");
     }
     delay(50);
 
@@ -195,7 +213,7 @@ void setupESPNow() {
         esp_now_peer_info_t peerInfo = {};
         memcpy(peerInfo.peer_addr, broadcastMac, 6);
         peerInfo.channel = ESPNOW_CHANNEL;
-        peerInfo.ifidx = WIFI_IF_AP;
+        peerInfo.ifidx = ESPNOW_IFACE;
         peerInfo.encrypt = false;
 
         if (esp_now_add_peer(&peerInfo) == ESP_OK) {
@@ -225,7 +243,7 @@ void createTask() {
         NULL,
         3,
         NULL,
-        1
+        tskNO_AFFINITY
     );
 
     if (taskResult != pdPASS) {
