@@ -1,6 +1,10 @@
 ﻿#include <WebServer.h>
 #include <ArduinoJson.h>
 #include "config.h"
+#include "crsf.h"
+
+extern TelemetryData_t telemetriesData;
+const char* resetReasonName(esp_reset_reason_t reason);
 
 static WebServer server(80);
 
@@ -245,6 +249,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
       <div class="tabs-header">
         <button class="tab-btn active" data-tab="mac-tab" id="mac-tab-btn">🔧 MAC-Address</button>
         <button class="tab-btn" data-tab="wifi-tab" id="wifi-tab-btn">📶 WIFI</button>
+        <button class="tab-btn" data-tab="status-tab" id="status-tab-btn">📊 Status</button>
       </div>
 
       <div id="mac-tab" class="tab-content active">
@@ -309,6 +314,16 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             <button class="btn-save" onclick="saveWifi()">💾 Save WIFI</button>
             <button class="btn-current" onclick="getCurrentWifi()">🔄 Current WIFI</button>
           </div>
+        </div>
+      </div>
+      <div id="status-tab" class="tab-content">
+        <div class="info-box">
+          <strong>Device status:</strong>
+          <div id="statusTable">Load...</div>
+        </div>
+        <div class="button-group">
+          <button class="btn-current" onclick="getStatus()">🔄 Refresh</button>
+          <button class="btn-current" onclick="rebootDevice()">⏻ Reboot</button>
         </div>
       </div>
       <div id="status" class="status"></div>
@@ -496,6 +511,51 @@ const char htmlPage[] PROGMEM = R"rawliteral(
       });
     }
 
+    // Live device status
+    let statusTimer = null;
+    function getStatus() {
+      fetch('/status')
+        .then(response => response.json())
+        .then(data => {
+          const rows = [
+            ['Mode', data.mode],
+            ['WiFi state', data.wifi_state],
+            ['SSID', data.ssid],
+            ['IP address', data.ip],
+            ['WiFi channel', data.wifi_channel],
+            ['ESP-NOW channel', data.espnow_channel],
+            ['Signal', data.wifi_state === 'connected' ? data.rssi + ' dBm' : '-'],
+            ['MAC (STA)', data.mac],
+            ['Telemetry packets', data.packets],
+            ['GPS data', data.gps ? 'yes' : 'no'],
+            ['Uptime', data.uptime + ' s'],
+            ['Free heap', data.heap + ' B'],
+            ['Reset reason', data.reset_reason]
+          ];
+
+          let html = '';
+          if (!data.channel_ok && data.warning) {
+            html += '<div class="status error" style="display:block;margin-bottom:10px">' + data.warning + '</div>';
+          }
+          html += '<table style="width:100%;border-collapse:collapse">';
+          rows.forEach(row => {
+            html += '<tr><td style="padding:3px 8px;color:#666">' + row[0] +
+                    '</td><td style="padding:3px 8px;font-family:monospace">' + row[1] + '</td></tr>';
+          });
+          html += '</table>';
+          document.getElementById('statusTable').innerHTML = html;
+        })
+        .catch(error => {
+          document.getElementById('statusTable').textContent = 'Device is not responding';
+        });
+    }
+
+    function rebootDevice() {
+      if (!confirm('Reboot the device?')) return;
+      fetch('/reboot', { method: 'POST' })
+        .then(() => showStatus('Device reboot...', 'success'));
+    }
+
     // Show status
     function showStatus(message, type) {
       const statusDiv = document.getElementById('status');
@@ -527,6 +587,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
       document.getElementById(tabId).classList.add('active');
       document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
+
+      if (statusTimer) {
+        clearInterval(statusTimer);
+        statusTimer = null;
+      }
+      if (tabId === 'status-tab') {
+        getStatus();
+        statusTimer = setInterval(getStatus, 2000);
+      }
     }
 
 
@@ -693,6 +762,58 @@ void handleSaveWifi() {
   safeReboot();
 }
 
+static const char* wifiStateName(wl_status_t status) {
+  switch (status) {
+    case WL_IDLE_STATUS:      return "idle";
+    case WL_NO_SSID_AVAIL:    return "no ssid";
+    case WL_SCAN_COMPLETED:   return "scan completed";
+    case WL_CONNECTED:        return "connected";
+    case WL_CONNECT_FAILED:   return "connect failed";
+    case WL_CONNECTION_LOST:  return "connection lost";
+    case WL_DISCONNECTED:     return "disconnected";
+    default:                  return "unknown";
+  }
+}
+
+// Handler for live device status (JSON)
+void handleStatus() {
+  JsonDocument doc;
+
+  bool staMode = config.wifiMode == STA_WIFI_MODE;
+  bool connected = WiFi.isConnected();
+  bool channelOk = !(staMode && connected && WiFi.channel() != config.wifiChannel);
+
+  doc["mode"] = staMode ? "STA" : "AP";
+  doc["wifi_state"] = wifiStateName(WiFi.status());
+  doc["ssid"] = staMode ? config.wifiSSID : String(apSSID);
+  doc["ip"] = (staMode && connected) ? WiFi.localIP().toString() : WiFi.softAPIP().toString();
+  doc["wifi_channel"] = connected ? WiFi.channel() : config.wifiChannel;
+  doc["espnow_channel"] = config.wifiChannel;
+  doc["channel_ok"] = channelOk;
+  if (!channelOk) {
+    doc["warning"] = "WiFi is on channel " + String(WiFi.channel()) +
+                     " but ESP-NOW needs channel " + String(config.wifiChannel) +
+                     ". Telemetry will not work: set the access point to this channel.";
+  }
+  doc["rssi"] = connected ? WiFi.RSSI() : 0;
+  doc["mac"] = macToString(config.customMAC);
+  doc["packets"] = telemetriesData.statistic.packetCount;
+  doc["gps"] = telemetriesData.gps.enabled;
+  doc["uptime"] = (uint32_t)(millis() / 1000);
+  doc["heap"] = ESP.getFreeHeap();
+  doc["reset_reason"] = resetReasonName(esp_reset_reason());
+
+  String response;
+  serializeJson(doc, response);
+  server.send(200, "application/json", response);
+}
+
+// Handler for a plain reboot (keeps all settings)
+void handleReboot() {
+  server.send(200, "text/plain", "OK");
+  safeReboot();
+}
+
 // Handler for resetting to factory MAC
 void handleReset() {
   // Getting the factory MAC
@@ -719,6 +840,10 @@ void handleInfo() {
 
   info += "<p><strong>IP address:</strong> " + WiFi.localIP().toString() + "</p>";
   info += "<p><strong>MAC WiFi:</strong> " + WiFi.macAddress() + "</p>";
+  info += "<p><strong>WiFi state:</strong> " + String(wifiStateName(WiFi.status())) + "</p>";
+  info += "<p><strong>Channel:</strong> " + String(WiFi.channel()) + " (ESP-NOW: " + String(config.wifiChannel) + ")</p>";
+  info += "<p><strong>Telemetry packets:</strong> " + String(telemetriesData.statistic.packetCount) + "</p>";
+  info += "<p><strong>Reset reason:</strong> " + String(resetReasonName(esp_reset_reason())) + "</p>";
   info += "<br><p><a href='/'>Go back to settings</a></p>";
   info += "</body></html>";
 
@@ -739,7 +864,9 @@ void webSwerverSetup() {
   server.on("/save_mac", HTTP_POST, handleSaveMac);
   server.on("/save_wifi", HTTP_POST, handleSaveWifi);
   server.on("/reset", HTTP_POST, handleReset);
+  server.on("/reboot", HTTP_POST, handleReboot);
   server.on("/info", handleInfo);
+  server.on("/status", handleStatus);
 
   server.begin();
   Serial.println("------------------------------------------------");

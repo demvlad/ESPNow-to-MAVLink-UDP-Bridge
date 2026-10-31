@@ -259,6 +259,22 @@ void createTask() {
     }
 }
 
+const char* resetReasonName(esp_reset_reason_t reason) {
+    switch (reason) {
+        case ESP_RST_POWERON:   return "power-on";
+        case ESP_RST_EXT:       return "external pin";
+        case ESP_RST_SW:        return "software";
+        case ESP_RST_PANIC:     return "panic/exception";
+        case ESP_RST_INT_WDT:   return "interrupt watchdog";
+        case ESP_RST_TASK_WDT:  return "task watchdog";
+        case ESP_RST_WDT:       return "other watchdog";
+        case ESP_RST_DEEPSLEEP: return "deep sleep";
+        case ESP_RST_BROWNOUT:  return "brownout (power supply!)";
+        case ESP_RST_SDIO:      return "SDIO";
+        default:                return "unknown";
+    }
+}
+
 bool espNowChannelMatchesWiFi() {
     if (!WiFi.isConnected()) return true;
     return WiFi.channel() == config.wifiChannel;
@@ -316,6 +332,7 @@ void setup() {
     delay(1000);
 
     Serial.println("=== ELRS CRSF Telemetry Parser ===");
+    Serial.printf("Reset reason: %s\n", resetReasonName(esp_reset_reason()));
 
     // MAC address setup
     loadMacFromStorage();
