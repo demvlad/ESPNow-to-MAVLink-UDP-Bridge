@@ -182,6 +182,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
       margin-bottom: 5px;
     }
 
+    .btn-eye {
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-size: 16px;
+      padding: 0 4px;
+      line-height: 1;
+    }
+
     .tabs-container {
       width: 100%;
       background: white;
@@ -270,9 +279,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         <div class="input-group">
           <label for="phrase">Or set from ELRS Binding phrase:</label>
-          <input type="text" id="phrase" name="phrase"
+          <input type="password" id="phrase" name="phrase"
                  placeholder="my_binding_phrase"
                  title="The same binding phrase you use in ExpressLRS">
+          <button class="btn-eye" id="phrase_toggle"
+                  onclick="toggleVisibility('phrase', 'phrase_toggle')"
+                  title="Show binding phrase">👁</button>
           <div class="mac-example">The MAC is calculated from the phrase exactly like ExpressLRS does</div>
         </div>
 
@@ -299,8 +311,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
           </div>
           <div class="input-row">
             <label for="wifi_password">Password</label>
-            <input class="wifi-input" type="text" id="wifi_password"
+            <input class="wifi-input" type="password" id="wifi_password"
                    title="WIFI password">
+            <button class="btn-eye" id="password_toggle"
+                    onclick="toggleVisibility('wifi_password', 'password_toggle')"
+                    title="Show password">👁</button>
           </div>
           <div class="input-row stacked">
             <label for="wifi_channel">ESP-NOW channel (ELRS backpack: 1, менять только если уверены)</label>
@@ -367,6 +382,21 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         password_elem.value = externalPassword;
         password_elem.readOnly = false;
         password_elem.style.cursor = 'text';
+      }
+    }
+
+    // Show/hide a secret field (password, binding phrase)
+    function toggleVisibility(fieldId, buttonId) {
+      const field = document.getElementById(fieldId);
+      const button = document.getElementById(buttonId);
+      if (field.type === 'password') {
+        field.type = 'text';
+        button.textContent = '🙈';
+        button.title = 'Hide';
+      } else {
+        field.type = 'password';
+        button.textContent = '👁';
+        button.title = 'Show';
       }
     }
 
@@ -772,7 +802,7 @@ void handleSaveWifi() {
 
   if (doc["wifi_password"].is<String>()) {
     const char* password = doc["wifi_password"];
-    Serial.printf("Password: %s\n", password);
+    Serial.printf("Password: %u chars\n", (unsigned)strlen(password));
     strcpy(config.wifiPassword, password);
   }
 

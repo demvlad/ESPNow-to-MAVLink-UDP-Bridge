@@ -88,7 +88,7 @@ bool connectToWiFi() {
     WiFi.begin(config.wifiSSID, config.wifiPassword);
 
 
-    Serial.printf("Connecting to: %s %s (ch%d)...", config.wifiSSID, config.wifiPassword, config.wifiChannel);
+    Serial.printf("Connecting to SSID '%s' (ESP-NOW channel %d)...", config.wifiSSID, config.wifiChannel);
 
     int attempts = 0;
     while (WiFi.status() != WL_CONNECTED && attempts < 30) {
