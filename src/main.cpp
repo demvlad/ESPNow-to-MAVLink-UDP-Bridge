@@ -27,6 +27,8 @@
 #define TELEMETRY_TIMEOUT_MS 3000
 #define UDP_DATA_SEND_INTERVAL_MS   100
 
+#define WIFI_RETRY_INTERVAL_MS 10000
+
 // ESP32-C3 has a single hardware MAC: the soft-AP MAC is always the station
 // MAC + 1 and cannot be set directly. Use the station interface for ESP-NOW.
 #if defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6)
@@ -257,6 +259,58 @@ void createTask() {
     }
 }
 
+bool espNowChannelMatchesWiFi() {
+    if (!WiFi.isConnected()) return true;
+    return WiFi.channel() == config.wifiChannel;
+}
+
+// Keeps the client connection alive: retries every WIFI_RETRY_INTERVAL_MS,
+// does a full disconnect/begin after several failed attempts.
+void wifiReconnectManager() {
+    if (config.wifiMode != STA_WIFI_MODE) return;
+
+    static uint32_t lastAttempt = 0;
+    static uint8_t failCount = 0;
+    static bool wasConnected = false;
+
+    if (WiFi.status() == WL_CONNECTED) {
+        if (!wasConnected) {
+            wasConnected = true;
+            failCount = 0;
+            Serial.printf("[WIFI] connected: %s, IP %s, ch %d, RSSI %d dBm\n",
+                          WiFi.SSID().c_str(), WiFi.localIP().toString().c_str(),
+                          WiFi.channel(), WiFi.RSSI());
+            if (!espNowChannelMatchesWiFi()) {
+                Serial.printf("[WIFI] WARNING: WiFi channel %d != ESP-NOW channel %d, telemetry will not work\n",
+                              WiFi.channel(), config.wifiChannel);
+            }
+        }
+        return;
+    }
+
+    if (wasConnected) {
+        wasConnected = false;
+        failCount = 0;
+        lastAttempt = millis();
+        Serial.println("[WIFI] connection lost, trying to reconnect...");
+        return;
+    }
+
+    if (millis() - lastAttempt < WIFI_RETRY_INTERVAL_MS) return;
+    lastAttempt = millis();
+    failCount++;
+
+    if (failCount <= 3) {
+        Serial.printf("[WIFI] reconnect attempt %u\n", failCount);
+        WiFi.reconnect();
+    } else {
+        Serial.printf("[WIFI] full reconnect attempt %u\n", failCount);
+        WiFi.disconnect();
+        delay(100);
+        WiFi.begin(config.wifiSSID, config.wifiPassword);
+    }
+}
+
 void setup() {
     Serial.begin(115200);
     delay(1000);
@@ -401,6 +455,7 @@ void printTelemetry(const TelemetryData_t* td) {
 
 void loop() {
     webServerRun();
+    wifiReconnectManager();
 #ifdef DEBUG_TO_LOG
     static uint32_t lastDisplay = 0;
     static uint32_t lastTelemetryPrint = 0;
