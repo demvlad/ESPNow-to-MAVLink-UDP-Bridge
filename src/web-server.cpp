@@ -146,6 +146,37 @@ const char htmlPage[] PROGMEM = R"rawliteral(
       box-sizing: border-box !important;
     }
 
+    .input-row.stacked {
+      display: block;
+    }
+
+    .input-row.stacked label {
+      display: block;
+      min-width: 0;
+      margin-bottom: 5px;
+    }
+
+    .chain-help {
+      margin-top: 15px;
+      font-size: 13px;
+      color: #444;
+    }
+
+    .chain-help summary {
+      cursor: pointer;
+      font-weight: bold;
+      color: #333;
+    }
+
+    .chain-help ol {
+      margin: 8px 0 0;
+      padding-left: 20px;
+    }
+
+    .chain-help li {
+      margin-bottom: 5px;
+    }
+
     .tabs-container {
       width: 100%;
       background: white;
@@ -256,11 +287,24 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             <input class="wifi-input" type="text" id="wifi_password"
                    title="WIFI password">
           </div>
-          <div class="input-row">
-            <label for="wifi_channel">Channel</label>
+          <div class="input-row stacked">
+            <label for="wifi_channel">ESP-NOW channel (ELRS backpack: 1, менять только если уверены)</label>
             <input class="wifi-input" type="text" id="wifi_channel"
-                   title="WIFI channel">
+                   title="ESP-NOW channel, must match the ELRS backpack and the WiFi network">
           </div>
+
+          <details class="chain-help">
+            <summary>Как работает цепочка ESP-NOW</summary>
+            <ol>
+              <li>Дрон отдаёт CRSF-телеметрию на пульт ELRS (TX), а бэкпак пульта отправляет её по ESP-NOW на адрес, вычисленный из binding phrase (UID), на канале 1.</li>
+              <li>ESP32 должна иметь тот же MAC, что этот UID: задайте его на вкладке MAC вручную или введите binding phrase — прошивка посчитает MAC так же, как ExpressLRS.</li>
+              <li>ESP32 принимает ESP-NOW и разбирает CRSF-фреймы: батарея, attitude, GPS и расширенный GPS-фрейм (нужен для системы идентификации).</li>
+              <li>Из этих данных собираются MAVLink-пакеты и отправляются по Wi-Fi на UDP-порт 14550 (broadcast). Их принимают Mission Planner, QGroundControl и MAVLinkSkyArc.</li>
+              <li>Радиомодуль у ESP32 один, поэтому Wi-Fi-сеть и ESP-NOW обязаны быть на одном канале: в режиме STA это канал точки доступа роутера/телефона, в режиме AP — канал собственной точки mavlink.</li>
+              <li>Если каналы разошлись, телеметрия не пойдёт: вкладка Status покажет предупреждение, а в лог будет выведено несовпадение.</li>
+              <li>MAVLink уходит только при наличии GPS-данных: без них смотреть нечего, поэтому на земле без фикса пакетов в GCS не будет.</li>
+            </ol>
+          </details>
           <div class="button-group">
             <button class="btn-save" onclick="saveWifi()">💾 Save WIFI</button>
             <button class="btn-current" onclick="getCurrentWifi()">🔄 Current WIFI</button>
@@ -276,11 +320,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
     // Disable ssid, password change in AP mode
     let externalSSID = "";
     let externalPassword = "";
-    let apChannel = "1";
     function wifiModeChange(wifi_mode) {
       const ssid_elem = document.getElementById('wifi_ssid');
       const password_elem = document.getElementById('wifi_password');
-      const channel_elem = document.getElementById('wifi_channel');
 
       if (wifi_mode === "ap") {
         externalSSID = ssid_elem.value;
@@ -292,11 +334,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         password_elem.value = "12345678";
         password_elem.readOnly = true;
         password_elem.style.cursor = 'not-allowed';
-
-        channel_elem.value = apChannel;
-        channel_elem.readOnly = false;
-        channel_elem.style.cursor = 'text';
-
       } else {
         ssid_elem.value = externalSSID;
         ssid_elem.readOnly = false;
@@ -305,11 +342,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         password_elem.value = externalPassword;
         password_elem.readOnly = false;
         password_elem.style.cursor = 'text';
-
-        apChannel = channel_elem.value;
-        channel_elem.value = "1";
-        channel_elem.readOnly = true;
-        channel_elem.style.cursor = 'not-allowed';
       }
     }
 
@@ -362,12 +394,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             password_elem.readOnly = false;
             password_elem.style.cursor = 'text';
 
-            channel_elem.value = "1";
-            channel_elem.readOnly = true;
-            channel_elem.style.cursor = 'not-allowed';
+            channel_elem.value = data.wifi_channel;
+            channel_elem.readOnly = false;
+            channel_elem.style.cursor = 'text';
           } else {
-              apChannel = data.wifi_channel;
-
               ssid_elem.value = "mavlink";
               ssid_elem.readOnly = true;
               ssid_elem.style.cursor = 'not-allowed';
@@ -376,7 +406,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
               password_elem.readOnly = true;
               password_elem.style.cursor = 'not-allowed';
 
-              channel_elem.value = apChannel;
+              channel_elem.value = data.wifi_channel;
               channel_elem.readOnly = false;
               channel_elem.style.cursor = 'text';
           }
@@ -649,7 +679,10 @@ void handleSaveWifi() {
   }
 
   if (doc["wifi_channel"].is<int>()) {
-    config.wifiChannel = doc["wifi_channel"];
+    int channel = doc["wifi_channel"];
+    if (channel < 1) channel = 1;
+    if (channel > 13) channel = 13;
+    config.wifiChannel = (uint8_t)channel;
     Serial.printf("Channel: %d\n", config.wifiChannel);
   }
 

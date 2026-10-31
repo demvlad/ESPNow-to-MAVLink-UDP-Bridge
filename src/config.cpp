@@ -57,6 +57,9 @@ void loadWifiFromStorage() {
   strcpy(config.wifiPassword, passValue.c_str());
 
   config.wifiChannel = preferences.getUChar("wifi_channel", 1);
+  if (config.wifiChannel < 1 || config.wifiChannel > 13) {
+    config.wifiChannel = 1;
+  }
   preferences.end();
 }
 

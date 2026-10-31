@@ -27,8 +27,6 @@
 #define TELEMETRY_TIMEOUT_MS 3000
 #define UDP_DATA_SEND_INTERVAL_MS   100
 
-#define ESPNOW_CHANNEL 1
-
 // ESP32-C3 has a single hardware MAC: the soft-AP MAC is always the station
 // MAC + 1 and cannot be set directly. Use the station interface for ESP-NOW.
 #if defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6)
@@ -62,7 +60,7 @@ void saveWifiToStorage();
 bool startAP() {
     Serial.println("Creating Access Point...");
 
-    bool success = WiFi.softAP(apSSID, apPassword);
+    bool success = WiFi.softAP(apSSID, apPassword, config.wifiChannel);
 
     if (success) {
         Serial.println("✓ Access Point created");
@@ -82,7 +80,7 @@ bool startAP() {
 bool connectToWiFi() {
     Serial.println("Connecting as Client...");
 
-    WiFi.softAP(apSSID, apPassword, ESPNOW_CHANNEL, false, 1);
+    WiFi.softAP(apSSID, apPassword, config.wifiChannel, false, 1);
 
     // Connect to AP
     WiFi.begin(config.wifiSSID, config.wifiPassword);
@@ -99,7 +97,6 @@ bool connectToWiFi() {
 
     if (WiFi.status() == WL_CONNECTED) {
         delay(1000);
-        esp_wifi_set_channel(ESPNOW_CHANNEL, WIFI_SECOND_CHAN_NONE);
 
         Serial.println("\n✓ Connected to WiFi");
         Serial.printf("  IP: %s\n", WiFi.localIP().toString().c_str());
@@ -108,6 +105,14 @@ bool connectToWiFi() {
         Serial.printf("  RSSI: %d dBm\n", WiFi.RSSI());
         Serial.printf("  Channel: %d\n", WiFi.channel());
         Serial.printf("  MAC: %s\n", WiFi.macAddress().c_str());
+        if (WiFi.channel() == config.wifiChannel) {
+            esp_wifi_set_channel(config.wifiChannel, WIFI_SECOND_CHAN_NONE);
+            Serial.printf("  ESP-NOW channel: %d (matches WiFi)\n", config.wifiChannel);
+        } else {
+            Serial.printf("  WARNING: WiFi is on channel %d, but ESP-NOW needs channel %d\n", WiFi.channel(), config.wifiChannel);
+            Serial.println("  Telemetry will NOT work. Set the access point to this channel");
+            Serial.println("  or change the channel on the WIFI tab of the web configurator.");
+        }
         Serial.println("To change configuration:");
         Serial.printf("Open the browser and go to the local network address: http://%s\n", gatewayIP.c_str());
         Serial.println("Or connect to mavlink access point with password 12345678, open the browser and go to the address: http://192.168.4.1");
@@ -212,7 +217,7 @@ void setupESPNow() {
         uint8_t broadcastMac[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
         esp_now_peer_info_t peerInfo = {};
         memcpy(peerInfo.peer_addr, broadcastMac, 6);
-        peerInfo.channel = ESPNOW_CHANNEL;
+        peerInfo.channel = config.wifiChannel;
         peerInfo.ifidx = ESPNOW_IFACE;
         peerInfo.encrypt = false;
 
