@@ -1,5 +1,6 @@
 ﻿#include <WebServer.h>
 #include <ArduinoJson.h>
+#include <mbedtls/md5.h>
 #include "config.h"
 #include "crsf.h"
 
@@ -267,8 +268,17 @@ const char htmlPage[] PROGMEM = R"rawliteral(
           <div class="mac-example">Format: AA:BB:CC:DD:EE:FF or AA-BB-CC-DD-EE-FF</div>
         </div>
 
+        <div class="input-group">
+          <label for="phrase">Or set from ELRS Binding phrase:</label>
+          <input type="text" id="phrase" name="phrase"
+                 placeholder="my_binding_phrase"
+                 title="The same binding phrase you use in ExpressLRS">
+          <div class="mac-example">The MAC is calculated from the phrase exactly like ExpressLRS does</div>
+        </div>
+
         <div class="button-group">
           <button class="btn-save" onclick="saveMac()">💾 Save MAC</button>
+          <button class="btn-save" onclick="savePhrase()">🔑 Save from phrase</button>
           <button class="btn-current" onclick="getCurrentMac()">🔄 Current MAC</button>
         </div>
       </div>
@@ -499,6 +509,38 @@ const char htmlPage[] PROGMEM = R"rawliteral(
       .then(data => {
         if (data === 'OK') {
           showStatus('WIFI settings successfully saved! Device reboot...', 'success');
+          setTimeout(() => {
+            location.reload();
+          }, 3000);
+        } else {
+          showStatus('Error: ' + data, 'error');
+        }
+      })
+      .catch(error => {
+        showStatus('Network error', 'error');
+      });
+    }
+
+    // Save MAC calculated from the ELRS binding phrase
+    function savePhrase() {
+      const phrase = document.getElementById('phrase').value.trim();
+      if (!phrase) {
+        showStatus('Enter the ELRS binding phrase', 'error');
+        return;
+      }
+
+      fetch('/save_phrase', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'phrase=' + encodeURIComponent(phrase)
+      })
+      .then(response => response.text())
+      .then(data => {
+        if (data.startsWith('OK')) {
+          document.getElementById('mac').value = data.slice(3);
+          showStatus('MAC ' + data.slice(3) + ' saved! Device reboot...', 'success');
           setTimeout(() => {
             location.reload();
           }, 3000);
@@ -762,6 +804,52 @@ void handleSaveWifi() {
   safeReboot();
 }
 
+// The UID (6 bytes) is the first 6 bytes of the MD5 of the ELRS bind key
+// and phrase, exactly as the ExpressLRS firmware calculates it.
+static void macFromBindingPhrase(const char* phrase, uint8_t* mac) {
+  static const char BIND_KEY[] = "-DMY_BINDING_PHRASE=\"";
+  uint8_t digest[16];
+  mbedtls_md5_context ctx;
+
+  mbedtls_md5_init(&ctx);
+  mbedtls_md5_update_ret(&ctx, (const unsigned char*)BIND_KEY, strlen(BIND_KEY));
+  mbedtls_md5_update_ret(&ctx, (const unsigned char*)phrase, strlen(phrase));
+  mbedtls_md5_update_ret(&ctx, (const unsigned char*)"\"", 1);
+  mbedtls_md5_finish_ret(&ctx, digest);
+  mbedtls_md5_free(&ctx);
+
+  memcpy(mac, digest, 6);
+}
+
+// Handler for storing MAC calculated from the ELRS binding phrase
+void handleSavePhrase() {
+  if (!server.hasArg("phrase")) {
+    server.send(400, "text/plain", "Phrase is not specified");
+    return;
+  }
+
+  String phrase = server.arg("phrase");
+  phrase.trim();
+
+  if (phrase.length() == 0) {
+    server.send(400, "text/plain", "Phrase is empty");
+    return;
+  }
+  if (phrase.length() > 63) {
+    server.send(400, "text/plain", "Phrase is too long");
+    return;
+  }
+
+  macFromBindingPhrase(phrase.c_str(), config.customMAC);
+  saveMacToStorage();
+
+  String mac = macToString(config.customMAC);
+  Serial.println("MAC from binding phrase: " + mac);
+
+  server.send(200, "text/plain", "OK " + mac);
+  safeReboot();
+}
+
 static const char* wifiStateName(wl_status_t status) {
   switch (status) {
     case WL_IDLE_STATUS:      return "idle";
@@ -866,6 +954,7 @@ void webSwerverSetup() {
   server.on("/reset", HTTP_POST, handleReset);
   server.on("/reboot", HTTP_POST, handleReboot);
   server.on("/info", handleInfo);
+  server.on("/save_phrase", HTTP_POST, handleSavePhrase);
   server.on("/status", handleStatus);
 
   server.begin();
