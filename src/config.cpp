@@ -57,6 +57,26 @@ void loadWifiFromStorage() {
   strcpy(config.wifiPassword, passValue.c_str());
 
   config.wifiChannel = preferences.getUChar("wifi_channel", 1);
+  if (config.wifiChannel < 1 || config.wifiChannel > 13) {
+    config.wifiChannel = 1;
+  }
+  preferences.end();
+}
+
+// Store UI language preference
+void saveUiLangToStorage() {
+  preferences.begin("ui_config", false);
+  preferences.putUChar("lang", config.uiLang);
+  preferences.end();
+}
+
+// Load UI language preference
+void loadUiLangFromStorage() {
+  preferences.begin("ui_config", false);
+  config.uiLang = preferences.getUChar("lang", UI_LANG_AUTO);
+  if (config.uiLang > UI_LANG_RU) {
+    config.uiLang = UI_LANG_AUTO;
+  }
   preferences.end();
 }
 

@@ -27,7 +27,17 @@
 #define TELEMETRY_TIMEOUT_MS 3000
 #define UDP_DATA_SEND_INTERVAL_MS   100
 
-#define ESPNOW_CHANNEL 1
+#define WIFI_RETRY_INTERVAL_MS 10000
+
+// ESP32-C3 has a single hardware MAC: the soft-AP MAC is always the station
+// MAC + 1 and cannot be set directly. Use the station interface for ESP-NOW.
+#if defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6)
+  #define USE_STA_FOR_ESPNOW 1
+  #define ESPNOW_IFACE WIFI_IF_STA
+#else
+  #define USE_STA_FOR_ESPNOW 0
+  #define ESPNOW_IFACE WIFI_IF_AP
+#endif
 
 // UDP setup
 WiFiUDP udp;
@@ -52,7 +62,7 @@ void saveWifiToStorage();
 bool startAP() {
     Serial.println("Creating Access Point...");
 
-    bool success = WiFi.softAP(apSSID, apPassword);
+    bool success = WiFi.softAP(apSSID, apPassword, config.wifiChannel);
 
     if (success) {
         Serial.println("✓ Access Point created");
@@ -72,13 +82,13 @@ bool startAP() {
 bool connectToWiFi() {
     Serial.println("Connecting as Client...");
 
-    WiFi.softAP(apSSID, apPassword, ESPNOW_CHANNEL, false, 1);
+    WiFi.softAP(apSSID, apPassword, config.wifiChannel, false, 1);
 
     // Connect to AP
     WiFi.begin(config.wifiSSID, config.wifiPassword);
 
 
-    Serial.printf("Connecting to: %s %s (ch%d)...", config.wifiSSID, config.wifiPassword, config.wifiChannel);
+    Serial.printf("Connecting to SSID '%s' (ESP-NOW channel %d)...", config.wifiSSID, config.wifiChannel);
 
     int attempts = 0;
     while (WiFi.status() != WL_CONNECTED && attempts < 30) {
@@ -89,7 +99,6 @@ bool connectToWiFi() {
 
     if (WiFi.status() == WL_CONNECTED) {
         delay(1000);
-        esp_wifi_set_channel(ESPNOW_CHANNEL, WIFI_SECOND_CHAN_NONE);
 
         Serial.println("\n✓ Connected to WiFi");
         Serial.printf("  IP: %s\n", WiFi.localIP().toString().c_str());
@@ -98,6 +107,14 @@ bool connectToWiFi() {
         Serial.printf("  RSSI: %d dBm\n", WiFi.RSSI());
         Serial.printf("  Channel: %d\n", WiFi.channel());
         Serial.printf("  MAC: %s\n", WiFi.macAddress().c_str());
+        if (WiFi.channel() == config.wifiChannel) {
+            esp_wifi_set_channel(config.wifiChannel, WIFI_SECOND_CHAN_NONE);
+            Serial.printf("  ESP-NOW channel: %d (matches WiFi)\n", config.wifiChannel);
+        } else {
+            Serial.printf("  WARNING: WiFi is on channel %d, but ESP-NOW needs channel %d\n", WiFi.channel(), config.wifiChannel);
+            Serial.println("  Telemetry will NOT work. Set the access point to this channel");
+            Serial.println("  or change the channel on the WIFI tab of the web configurator.");
+        }
         Serial.println("To change configuration:");
         Serial.printf("Open the browser and go to the local network address: http://%s\n", gatewayIP.c_str());
         Serial.println("Or connect to mavlink access point with password 12345678, open the browser and go to the address: http://192.168.4.1");
@@ -113,14 +130,15 @@ bool connectToWiFi() {
 }
 
 bool setupCustomMAC() {
-    // Set custom MAC for AP
-    wifi_interface_t interface = WIFI_IF_AP;
+    // Set custom MAC for the ESP-NOW interface
+    wifi_interface_t interface = ESPNOW_IFACE;
     uint8_t macToSet[6];
     memcpy(macToSet, config.customMAC, 6);
     macToSet[0] &= ~0x01;
 
-    if (esp_wifi_set_mac(interface, macToSet) != ESP_OK) {
-        Serial.println("Failed to set MAC");
+    esp_err_t macErr = esp_wifi_set_mac(interface, macToSet);
+    if (macErr != ESP_OK) {
+        Serial.printf("Failed to set MAC: %d (%s)\n", macErr, esp_err_to_name(macErr));
         return false;
     }
 
@@ -145,22 +163,29 @@ bool startWiFi() {
 
     // 2. Set WIFI mode
     if (config.wifiMode == AP_WIFI_MODE) {
+#if !USE_STA_FOR_ESPNOW
         WiFi.mode(WIFI_AP);
         Serial.println("Set WiFi mode: WIFI_AP");
+#else
+        // The station interface must exist for ESP-NOW and for setting the MAC
+        WiFi.mode(WIFI_AP_STA);
+        Serial.println("Set WiFi mode: WIFI_AP (with station interface)");
+#endif
     } else {
         WiFi.mode(WIFI_AP_STA);
         Serial.println("Set WiFi mode: WIFI_STA");
     }
     delay(50);
 
-    // Check WiFi initialization
-    if (esp_wifi_start() != ESP_OK) {
-        Serial.println("Warning: WiFi driver not started, trying to start...");
-    }
-
-    // 3. Set custom MAC address
+    // 3. Set custom MAC address. On ESP32-C3 the MAC can only be changed
+    // while the WiFi driver is stopped, so restart it around the change.
+    esp_wifi_stop();
+    delay(50);
     if (!setupCustomMAC()) {
         return false;
+    }
+    if (esp_wifi_start() != ESP_OK) {
+        Serial.println("Warning: WiFi driver not started, trying to start...");
     }
     delay(50);
 
@@ -194,8 +219,8 @@ void setupESPNow() {
         uint8_t broadcastMac[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
         esp_now_peer_info_t peerInfo = {};
         memcpy(peerInfo.peer_addr, broadcastMac, 6);
-        peerInfo.channel = ESPNOW_CHANNEL;
-        peerInfo.ifidx = WIFI_IF_AP;
+        peerInfo.channel = config.wifiChannel;
+        peerInfo.ifidx = ESPNOW_IFACE;
         peerInfo.encrypt = false;
 
         if (esp_now_add_peer(&peerInfo) == ESP_OK) {
@@ -225,7 +250,7 @@ void createTask() {
         NULL,
         3,
         NULL,
-        1
+        tskNO_AFFINITY
     );
 
     if (taskResult != pdPASS) {
@@ -234,11 +259,80 @@ void createTask() {
     }
 }
 
+const char* resetReasonName(esp_reset_reason_t reason) {
+    switch (reason) {
+        case ESP_RST_POWERON:   return "power-on";
+        case ESP_RST_EXT:       return "external pin";
+        case ESP_RST_SW:        return "software";
+        case ESP_RST_PANIC:     return "panic/exception";
+        case ESP_RST_INT_WDT:   return "interrupt watchdog";
+        case ESP_RST_TASK_WDT:  return "task watchdog";
+        case ESP_RST_WDT:       return "other watchdog";
+        case ESP_RST_DEEPSLEEP: return "deep sleep";
+        case ESP_RST_BROWNOUT:  return "brownout (power supply!)";
+        case ESP_RST_SDIO:      return "SDIO";
+        default:                return "unknown";
+    }
+}
+
+bool espNowChannelMatchesWiFi() {
+    if (!WiFi.isConnected()) return true;
+    return WiFi.channel() == config.wifiChannel;
+}
+
+// Keeps the client connection alive: retries every WIFI_RETRY_INTERVAL_MS,
+// does a full disconnect/begin after several failed attempts.
+void wifiReconnectManager() {
+    if (config.wifiMode != STA_WIFI_MODE) return;
+
+    static uint32_t lastAttempt = 0;
+    static uint8_t failCount = 0;
+    static bool wasConnected = false;
+
+    if (WiFi.status() == WL_CONNECTED) {
+        if (!wasConnected) {
+            wasConnected = true;
+            failCount = 0;
+            Serial.printf("[WIFI] connected: %s, IP %s, ch %d, RSSI %d dBm\n",
+                          WiFi.SSID().c_str(), WiFi.localIP().toString().c_str(),
+                          WiFi.channel(), WiFi.RSSI());
+            if (!espNowChannelMatchesWiFi()) {
+                Serial.printf("[WIFI] WARNING: WiFi channel %d != ESP-NOW channel %d, telemetry will not work\n",
+                              WiFi.channel(), config.wifiChannel);
+            }
+        }
+        return;
+    }
+
+    if (wasConnected) {
+        wasConnected = false;
+        failCount = 0;
+        lastAttempt = millis();
+        Serial.println("[WIFI] connection lost, trying to reconnect...");
+        return;
+    }
+
+    if (millis() - lastAttempt < WIFI_RETRY_INTERVAL_MS) return;
+    lastAttempt = millis();
+    failCount++;
+
+    if (failCount <= 3) {
+        Serial.printf("[WIFI] reconnect attempt %u\n", failCount);
+        WiFi.reconnect();
+    } else {
+        Serial.printf("[WIFI] full reconnect attempt %u\n", failCount);
+        WiFi.disconnect();
+        delay(100);
+        WiFi.begin(config.wifiSSID, config.wifiPassword);
+    }
+}
+
 void setup() {
     Serial.begin(115200);
     delay(1000);
 
     Serial.println("=== ELRS CRSF Telemetry Parser ===");
+    Serial.printf("Reset reason: %s\n", resetReasonName(esp_reset_reason()));
 
     // MAC address setup
     loadMacFromStorage();
@@ -378,6 +472,7 @@ void printTelemetry(const TelemetryData_t* td) {
 
 void loop() {
     webServerRun();
+    wifiReconnectManager();
 #ifdef DEBUG_TO_LOG
     static uint32_t lastDisplay = 0;
     static uint32_t lastTelemetryPrint = 0;
