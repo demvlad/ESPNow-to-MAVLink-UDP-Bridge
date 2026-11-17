@@ -41,13 +41,13 @@ bool buildMAVLinkDataStream(TelemetryData_t* telemetry, uint8_t** ptrMavlinkData
         // time_usec Timestamp (microseconds since UNIX epoch or microseconds since system boot)
         micros(),
         // fix_type 0-1: no fix, 2: 2D fix, 3: 3D fix. Some applications will not use the value of this field unless it is at least two, so always correctly fill in the fix.
-        telemetry->gps_ext.enabled ? telemetry->gps_ext.fix_type : telemetry->gps.satellites > 5 ? 3 : 0,
+        telemetry->gps_ext.enabled ? telemetry->gps_ext.fix_type : telemetry->gps.satellites > 3 ? 3 : 0,
         // lat Latitude in 1E7 degrees
         telemetry->gps.latitude * 1e7,
         // lon Longitude in 1E7 degrees
         telemetry->gps.longitude * 1e7,
         // alt Altitude in 1E3 meters (millimeters) above MSL
-        telemetry->gps.altitude * 1000.0f,
+        telemetry->gps_ext.enabled ? telemetry->gps_ext.alt_ellipsoid * 1000.0f : telemetry->gps.altitude * 1000.0f,
         // eph GPS HDOP horizontal dilution of position (unitless * 100). If unknown, set to: UINT16_MAX
         telemetry->gps_ext.enabled ? telemetry->gps_ext.hDOP * 100 : UINT16_MAX,
         // epv GPS VDOP vertical dilution of position (unitless * 100). If unknown, set to: UINT16_MAX

@@ -161,8 +161,8 @@ bool parseCRSFPacket(const uint8_t *data, int len, TelemetryData_t* telemetry) {
                 telemetry->gps_ext.h_speed_acc = bigEndian16(payload + 7) / 100.0f;  // [m/s]
                 telemetry->gps_ext.track_acc = bigEndian16(payload + 9) / 10.0f;     // [deg]
                 telemetry->gps_ext.alt_ellipsoid = (float)bigEndian16(payload + 11);     // [m]
-                telemetry->gps_ext.h_acc = bigEndian16(payload + 13) / 10.0f;     // [m]
-                telemetry->gps_ext.v_acc = bigEndian16(payload + 15) / 10.0f;     // [m]
+                telemetry->gps_ext.h_acc = bigEndian16(payload + 13) / 100.0f;     // [m]
+                telemetry->gps_ext.v_acc = bigEndian16(payload + 15) / 100.0f;     // [m]
                 telemetry->gps_ext.hDOP = payload[18] / 10.0f;     // units
                 telemetry->gps_ext.vDOP = payload[19] / 10.0f;     // units
             }
